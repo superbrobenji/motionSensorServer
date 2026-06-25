@@ -25,6 +25,7 @@ func isValidAdapterType(t int32) bool {
 type APIServer struct {
 	meshServer *MeshServer
 	router     *mux.Router
+	apiKey     string
 }
 
 // NewAPIServer creates a new API server
@@ -32,12 +33,10 @@ func NewAPIServer(meshServer *MeshServer, apiKey string, allowedOrigins []string
 	api := &APIServer{
 		meshServer: meshServer,
 		router:     mux.NewRouter(),
+		apiKey:     apiKey,
 	}
 	if len(allowedOrigins) > 0 {
 		api.router.Use(CORSMiddleware(allowedOrigins))
-	}
-	if apiKey != "" {
-		api.router.Use(AuthMiddleware(apiKey))
 	}
 	api.setupRoutes()
 	return api
@@ -45,32 +44,41 @@ func NewAPIServer(meshServer *MeshServer, apiKey string, allowedOrigins []string
 
 // setupRoutes configures the HTTP routes
 func (api *APIServer) setupRoutes() {
+	// Metrics endpoint — no auth (Prometheus scrapers don't send Bearer tokens)
+	api.router.Handle("/metrics", MetricsHandler())
+
+	// All other routes — wrapped with auth when an API key is configured
+	sub := api.router.PathPrefix("").Subrouter()
+	if api.apiKey != "" {
+		sub.Use(AuthMiddleware(api.apiKey))
+	}
+
 	// Node management
-	api.router.HandleFunc("/nodes", api.getNodes).Methods("GET")
-	api.router.HandleFunc("/nodes/{mac}", api.getNode).Methods("GET")
-	api.router.HandleFunc("/nodes/{mac}/configure", api.configureNode).Methods("POST")
-	api.router.HandleFunc("/nodes/configure-all", api.configureAllNodes).Methods("POST")
+	sub.HandleFunc("/nodes", api.getNodes).Methods("GET")
+	sub.HandleFunc("/nodes/{mac}", api.getNode).Methods("GET")
+	sub.HandleFunc("/nodes/{mac}/configure", api.configureNode).Methods("POST")
+	sub.HandleFunc("/nodes/configure-all", api.configureAllNodes).Methods("POST")
 
 	// Health and monitoring
-	api.router.HandleFunc("/health/request", api.requestHealth).Methods("POST")
-	api.router.HandleFunc("/status", api.getStatus).Methods("GET")
+	sub.HandleFunc("/health/request", api.requestHealth).Methods("POST")
+	sub.HandleFunc("/status", api.getStatus).Methods("GET")
 
 	// Data broadcasting
-	api.router.HandleFunc("/broadcast", api.broadcastData).Methods("POST")
+	sub.HandleFunc("/broadcast", api.broadcastData).Methods("POST")
 
 	// Server control
-	api.router.HandleFunc("/server/start", api.startServer).Methods("POST")
-	api.router.HandleFunc("/server/stop", api.stopServer).Methods("POST")
+	sub.HandleFunc("/server/start", api.startServer).Methods("POST")
+	sub.HandleFunc("/server/stop", api.stopServer).Methods("POST")
 
 	// Enrollment management
-	api.router.HandleFunc("/api/enrollments/pending", api.getPendingEnrollments).Methods("GET")
-	api.router.HandleFunc("/api/enrollments", api.getAllEnrollments).Methods("GET")
-	api.router.HandleFunc("/api/enrollments/{mac}/approve", api.approveEnrollment).Methods("POST")
-	api.router.HandleFunc("/api/enrollments/{mac}/reject", api.rejectEnrollment).Methods("POST")
+	sub.HandleFunc("/api/enrollments/pending", api.getPendingEnrollments).Methods("GET")
+	sub.HandleFunc("/api/enrollments", api.getAllEnrollments).Methods("GET")
+	sub.HandleFunc("/api/enrollments/{mac}/approve", api.approveEnrollment).Methods("POST")
+	sub.HandleFunc("/api/enrollments/{mac}/reject", api.rejectEnrollment).Methods("POST")
 
 	// TX power
-	api.router.HandleFunc("/api/tx-power", api.handleGetTxPower).Methods("GET")
-	api.router.HandleFunc("/api/tx-power", api.handleSetTxPower).Methods("POST")
+	sub.HandleFunc("/api/tx-power", api.handleGetTxPower).Methods("GET")
+	sub.HandleFunc("/api/tx-power", api.handleSetTxPower).Methods("POST")
 }
 
 // ServeHTTP implements the http.Handler interface

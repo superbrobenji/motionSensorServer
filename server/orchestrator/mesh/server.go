@@ -131,6 +131,7 @@ func (ms *MeshServer) Start() error {
 
 	ms.serialComm = NewSerialComm(port)
 	ms.running = true
+	SetSerialConnected(true)
 
 	// Start message processing goroutine
 	ms.wg.Add(1)
@@ -181,6 +182,7 @@ func (ms *MeshServer) Stop() error {
 	}
 
 	ms.wg.Wait()
+	SetSerialConnected(false)
 	slog.Info("Mesh server stopped")
 	return nil
 }
@@ -402,8 +404,10 @@ func (ms *MeshServer) handlePIRData(msg *MeshMessage) error {
 		return nil
 	}
 
-	if err := ms.eventStore.WriteMessage(string(eventJSON), "motion-trigger"); err != nil {
-		slog.Warn("Failed to write PIR event to Kafka", "error", err)
+	writeErr := ms.eventStore.WriteMessage(string(eventJSON), "motion-trigger")
+	RecordKafkaWrite("motion-trigger", writeErr)
+	if writeErr != nil {
+		slog.Warn("Failed to write PIR event to Kafka", "error", writeErr)
 	}
 
 	return nil
@@ -615,5 +619,7 @@ func (ms *MeshServer) logMessageToKafka(msg *MeshMessage, direction string) erro
 		return fmt.Errorf("failed to marshal log entry: %w", err)
 	}
 
-	return ms.eventStore.WriteMessage(string(logJSON), "mesh-messages")
+	err = ms.eventStore.WriteMessage(string(logJSON), "mesh-messages")
+	RecordKafkaWrite("mesh-messages", err)
+	return err
 }
