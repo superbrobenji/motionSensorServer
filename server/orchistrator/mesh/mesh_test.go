@@ -313,3 +313,29 @@ func TestNodeRegistryLoad_MissingFile(t *testing.T) {
 		t.Errorf("expected no error for missing file, got %v", err)
 	}
 }
+
+func TestHandlePIRData_KafkaWriteError(t *testing.T) {
+	mockStore := NewMockEventStore()
+	registry := NewNodeRegistry()
+	builder := NewMessageBuilder()
+
+	server := &MeshServer{
+		nodeRegistry:   registry,
+		messageBuilder: builder,
+		eventStore:     mockStore,
+	}
+
+	msg := &MeshMessage{
+		OriginMacAddress: []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66},
+		HopCount:         1,
+	}
+
+	err := server.handlePIRData(msg)
+	if err != nil {
+		t.Errorf("handlePIRData should not return error for valid message, got %v", err)
+	}
+
+	if len(mockStore.GetMessages()) != 1 {
+		t.Errorf("expected 1 Kafka message written, got %d", len(mockStore.GetMessages()))
+	}
+}

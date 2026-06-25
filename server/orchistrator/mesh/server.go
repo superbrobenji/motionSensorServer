@@ -383,13 +383,8 @@ func (ms *MeshServer) handleEnrollmentRequest(msg *MeshMessage) error {
 
 // handlePIRData processes PIR sensor data
 func (ms *MeshServer) handlePIRData(msg *MeshMessage) error {
-	if ms.eventStore == nil {
-		slog.Warn("eventStore not configured, dropping PIR event")
-		return nil
-	}
 	slog.Info("PIR motion detected", "mac", macToString(msg.OriginMacAddress), "hops", msg.HopCount)
 
-	// Log PIR event to Kafka with more specific topic
 	pirEvent := map[string]interface{}{
 		"type":      "pir_motion",
 		"mac":       macToString(msg.OriginMacAddress),
@@ -400,11 +395,15 @@ func (ms *MeshServer) handlePIRData(msg *MeshMessage) error {
 
 	eventJSON, err := json.Marshal(pirEvent)
 	if err != nil {
-		slog.Error("Failed to marshal PIR event", "error", err)
-		return err
+		return fmt.Errorf("failed to marshal PIR event: %w", err)
 	}
+
+	if ms.eventStore == nil {
+		return nil
+	}
+
 	if err := ms.eventStore.WriteMessage(string(eventJSON), "motion-trigger"); err != nil {
-		slog.Warn("Failed to log PIR event to Kafka", "error", err)
+		slog.Warn("Failed to write PIR event to Kafka", "error", err)
 	}
 
 	return nil
