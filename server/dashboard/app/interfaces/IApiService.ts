@@ -15,5 +15,4 @@ export interface IEnrollment {
 export interface ITxPowerStatus {
   preset: number;
   name: string;
-  options: Array<{ value: number; label: string }>;
 }

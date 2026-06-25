@@ -343,11 +343,6 @@ func (api *APIServer) handleGetTxPower(w http.ResponseWriter, r *http.Request) {
 		Data: map[string]interface{}{
 			"preset": preset,
 			"name":   name,
-			"options": []map[string]interface{}{
-				{"value": 0, "label": "Short Range (2dBm) — same room"},
-				{"value": 1, "label": "Indoor (14dBm) — through walls"},
-				{"value": 2, "label": "Outdoor (20dBm) — maximum range"},
-			},
 		},
 	})
 }

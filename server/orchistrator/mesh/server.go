@@ -547,6 +547,9 @@ func (ms *MeshServer) SetTxPowerPreset(preset uint8) error {
 	if preset > 2 {
 		return fmt.Errorf("invalid TX power preset %d: must be 0 (short), 1 (indoor), or 2 (outdoor)", preset)
 	}
+	if ms.serialComm == nil {
+		return fmt.Errorf("mesh server is not running")
+	}
 
 	// Frame: [2-byte LE length][A1][preset]
 	payload := []byte{OpTxPowerSet, preset}
@@ -557,13 +560,17 @@ func (ms *MeshServer) SetTxPowerPreset(preset uint8) error {
 		return fmt.Errorf("failed to send TX power preset: %w", err)
 	}
 
+	ms.mu.Lock()
 	ms.currentTxPreset = preset
+	ms.mu.Unlock()
 	log.Printf("[TX_POWER] Preset set to %s (%d)", txPowerPresetNames[preset], preset)
 	return nil
 }
 
 // GetTxPowerPreset returns the current TX power preset value and name.
 func (ms *MeshServer) GetTxPowerPreset() (uint8, string) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 	return ms.currentTxPreset, txPowerPresetNames[ms.currentTxPreset]
 }
 
