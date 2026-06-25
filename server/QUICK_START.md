@@ -151,7 +151,7 @@ curl -X POST http://localhost:8080/health/request
 ### Docker Issues
 ```bash
 # View logs
-docker-compose logs -f orchistrator
+docker-compose logs -f orchestrator
 
 # Restart services
 docker-compose restart
@@ -177,13 +177,13 @@ sudo chmod 666 /dev/ttyUSB0
 ### API Not Responding
 ```bash
 # Check if container is running
-docker-compose ps orchistrator
+docker-compose ps orchestrator
 
 # Check container logs
-docker-compose logs orchistrator
+docker-compose logs orchestrator
 
 # Test from inside container
-docker-compose exec orchistrator curl localhost:8080/status
+docker-compose exec orchestrator curl localhost:8080/status
 ```
 
 ## Next Steps
@@ -193,4 +193,4 @@ docker-compose exec orchistrator curl localhost:8080/status
 3. Monitor PIR events in Kafka
 4. Use Jupyter notebooks for data analysis
 
-See `orchistrator/README.md` for complete documentation.
+See `orchestrator/README.md` for complete documentation.

@@ -1,0 +1,18 @@
+syntax = "proto3";
+package mesh;
+
+option go_package = "github.com/superbrobenji/motionServer/mesh";
+
+message MeshMessage {
+  uint32 messageType       = 1;  // 0=ADAPTER_DATA, 1=MASTER_BEACON, 2=ENROLLMENT, 3=JOIN_ACK
+  sint32 dataType          = 2;  // zigzag: -1=UNKNOWN, 0=PIR, 1=WIFI, 2=LED, 3=SERIAL
+  bytes  originMacAddress  = 3;  // 6 bytes
+  bytes  targetMacAddress  = 4;  // 6 bytes
+  bytes  lastHopMacAddress = 5;  // 6 bytes
+  bytes  data              = 6;  // up to 12 bytes
+  uint32 hopCount          = 7;
+  uint32 epochNum          = 8;  // sender boot epoch (was field 9 — CORRECTED to match firmware)
+  uint32 seqNum            = 9;  // per-boot sequence counter (was field 10 — CORRECTED)
+  uint32 protoVersion      = 10; // must be 1 for v1 messages (was field 8 — CORRECTED)
+  bytes  public_key        = 11; // enrollment/join_ack: 32-byte Curve25519 public key
+}

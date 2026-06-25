@@ -43,34 +43,33 @@ services:
     networks:
       - kafka-net
 
-  orchistrator:
-    build: ./orchistrator
+  orchestrator:
+    build: ./orchestrator
     depends_on:
       kafka:
         condition: service_healthy
     volumes:
-      - ./orchistrator:/orchistrator
-      - "/dev:/dev" # Mount entire /dev directory for device access
-      - "/sys:/sys" # Mount entire /sys for device information
-      - "/run/udev:/run/udev:ro" # Mount udev for device management
+      - ./orchestrator:/orchestrator
     ports:
       - "8080:8080"
     devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0:rwm" # Bind mount the actual device with explicit permissions
-    privileged: true # Required for USB and serial port access
-    user: "0:0" # Run as root to access USB devices
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
     group_add:
-      - "20" # Add dialout group (typically GID 20)
-    cap_add:
-      - SYS_ADMIN # System administration capabilities
+      - "20"
+    read_only: true
     security_opt:
-      - apparmor:unconfined # Disable AppArmor restrictions
-      - seccomp:unconfined # Disable seccomp restrictions
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
     environment:
-      - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0} # Override with env var if needed
+      - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0}
       - BAUD_RATE=${BAUD_RATE:-115200}
       - API_PORT=${API_PORT:-8080}
       - KAFKA_BROKER=kafka:9092
+      - API_KEY=${API_KEY:?API_KEY is required}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
     networks:
       - kafka-net
     restart: unless-stopped
@@ -78,10 +77,16 @@ services:
   dashboard:
     build: ./dashboard
     depends_on:
-      orchistrator:
+      orchestrator:
         condition: service_healthy
     ports:
       - "3000:3000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - VITE_API_URL=http://orchestrator:8080
+      - VITE_API_KEY=${API_KEY:?API_KEY is required}
     networks:
       - kafka-net
 
