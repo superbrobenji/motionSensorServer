@@ -34,11 +34,21 @@ const endpoints: Record<ServiceName, string | ((mac: string) => string)> = {
   stopServer: "/server/stop",
 };
 
+export function buildUrl(service: ServiceName, mac?: string): string {
+  const endpoint = endpoints[service];
+  if (typeof endpoint === "function") {
+    if (!mac) throw new Error(`Service ${service} requires a mac parameter`);
+    return `${HOST_URL}${endpoint(mac)}`;
+  }
+  return `${HOST_URL}${endpoint}`;
+}
+
 export default async function ApiService<ApiResponse>(
   service: ServiceName,
-  options?: RequestInit
+  options?: RequestInit,
+  mac?: string
 ): Promise<ApiResponse> {
-  const url = `${HOST_URL}${endpoints[service]}`;
+  const url = buildUrl(service, mac);
   const response: Response = await fetch(url, {
     ...options,
     headers: {
@@ -47,9 +57,7 @@ export default async function ApiService<ApiResponse>(
     },
   });
   if (!response.ok) {
-    throw new Error(
-      `API error: ${response.status ?? "Unknown Error occurred"}`
-    );
+    throw new Error(`API error: ${response.status}`);
   }
   return response.json();
 }
