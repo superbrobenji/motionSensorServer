@@ -70,7 +70,7 @@ func main() {
 
 		slog.Warn("Kafka connection attempt failed", "attempt", i+1, "error", err)
 		if i < maxRetries-1 {
-			slog.Info("Retrying Kafka connection", "delay", retryDelay)
+			slog.Warn("Retrying Kafka connection", "delay", retryDelay)
 			time.Sleep(retryDelay)
 			eventStore = nil
 		}
