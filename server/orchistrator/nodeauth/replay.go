@@ -1,39 +1,46 @@
 package nodeauth
 
-import (
-	"sync"
-)
+import "sync"
 
-// replayKey uniquely identifies a message (sender + epoch + seq).
-type replayKey struct {
-	mac   [6]byte
+type ringEntry struct {
 	epoch uint32
 	seq   uint32
 }
 
-// ReplayCache detects replayed messages using a sliding ring buffer per node.
-type ReplayCache struct {
-	mu    sync.Mutex
-	cache []replayKey
-	size  int
-	idx   int
+type nodeBuf struct {
+	buf [32]ringEntry
+	idx int
 }
 
-func NewReplayCache(size int) *ReplayCache {
-	return &ReplayCache{cache: make([]replayKey, size), size: size}
+// ReplayCache detects replayed messages using a per-node fixed-size ring buffer.
+// Each node gets its own 32-slot ring; eviction is FIFO within that node's buffer.
+type ReplayCache struct {
+	mu    sync.Mutex
+	nodes map[[6]byte]*nodeBuf
+}
+
+func NewReplayCache(_ int) *ReplayCache {
+	return &ReplayCache{nodes: make(map[[6]byte]*nodeBuf)}
 }
 
 // IsDuplicate returns true if (mac, epoch, seq) was seen recently; records it otherwise.
+// The zero-value check (epoch != 0 || seq != 0) prevents uninitialized buffer slots
+// from matching valid messages. Since epoch is a boot counter (starts at 1) and seq is
+// a per-boot counter (starts at 1), epoch=0/seq=0 should never appear in valid messages.
 func (rc *ReplayCache) IsDuplicate(mac [6]byte, epoch, seq uint32) bool {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	k := replayKey{mac: mac, epoch: epoch, seq: seq}
-	for _, entry := range rc.cache {
-		if entry == k {
+	nb := rc.nodes[mac]
+	if nb == nil {
+		nb = &nodeBuf{}
+		rc.nodes[mac] = nb
+	}
+	for _, e := range nb.buf {
+		if e.epoch == epoch && e.seq == seq && (e.epoch != 0 || e.seq != 0) {
 			return true
 		}
 	}
-	rc.cache[rc.idx] = k
-	rc.idx = (rc.idx + 1) % rc.size
+	nb.buf[nb.idx] = ringEntry{epoch: epoch, seq: seq}
+	nb.idx = (nb.idx + 1) % 32
 	return false
 }

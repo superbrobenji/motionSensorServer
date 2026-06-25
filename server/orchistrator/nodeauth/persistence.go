@@ -70,10 +70,12 @@ func (r *Registry) Load(path string) error {
 			continue
 		}
 		node := &NodeAuth{
-			MAC:       mac,
-			MACString: e.MAC,
-			PublicKey: pubKey,
-			Status:    TrustStatus(e.Status),
+			MAC:        mac,
+			MACString:  e.MAC,
+			PublicKey:  pubKey,
+			Status:     TrustStatus(e.Status),
+			ReceivedAt: time.Unix(e.ReceivedAt, 0),
+			ApprovedAt: time.Unix(e.ApprovedAt, 0),
 		}
 		r.nodes[e.MAC] = node
 	}
