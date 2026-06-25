@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -114,11 +115,10 @@ func main() {
 	}
 
 	// Start HTTP API server
-	go func() {
-		if err := mesh.StartAPIServer(meshServer, *apiPort, apiKey, allowedOrigins); err != nil {
-			log.Printf("API server error: %v", err)
-		}
-	}()
+	shutdownAPI, err := mesh.StartAPIServer(meshServer, *apiPort, apiKey, allowedOrigins)
+	if err != nil {
+		log.Fatalf("Failed to start API server: %v", err)
+	}
 
 	// Setup graceful shutdown
 
@@ -137,6 +137,14 @@ func main() {
 		if err := meshServer.Stop(); err != nil {
 			log.Printf("Error stopping mesh server: %v", err)
 		}
+	}
+
+	// Gracefully shut down HTTP API server
+	log.Printf("Shutting down API server...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := shutdownAPI(shutdownCtx); err != nil {
+		log.Printf("API server shutdown error: %v", err)
 	}
 
 	// Close event store

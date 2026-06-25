@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -400,10 +401,32 @@ func (api *APIServer) handleSetTxPower(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// StartAPIServer starts the HTTP API server
-func StartAPIServer(meshServer *MeshServer, port int, apiKey string, allowedOrigins []string) error {
-	api := NewAPIServer(meshServer, apiKey, allowedOrigins)
+// StartAPIServer starts the HTTP API server and returns a shutdown function.
+func StartAPIServer(meshServer *MeshServer, port int, apiKey string, corsOrigins []string) (shutdown func(context.Context) error, err error) {
+	api := NewAPIServer(meshServer, apiKey, corsOrigins)
 
-	log.Printf("Starting API server on port %d", port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", port), api)
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", port),
+		Handler:      api,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Printf("Starting API server on port %d", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	// Give the server a moment to bind; surface immediate errors (e.g. port in use).
+	select {
+	case err := <-errCh:
+		return nil, err
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	return srv.Shutdown, nil
 }
