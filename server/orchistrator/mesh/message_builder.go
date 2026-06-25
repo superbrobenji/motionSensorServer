@@ -35,7 +35,7 @@ func (mb *MessageBuilder) BuildConfigSetMessage(targetMAC []byte, adapterType in
 
 // BuildConfigSetBroadcastMessage creates a broadcast message to set adapter type on all nodes
 func (mb *MessageBuilder) BuildConfigSetBroadcastMessage(adapterType int32) (*MeshMessage, error) {
-	return mb.BuildConfigSetMessage(BroadcastMAC, adapterType)
+	return mb.BuildConfigSetMessage(BroadcastMACBytes(), adapterType)
 }
 
 // BuildHealthRequestMessage creates a message to request health reports
@@ -135,22 +135,4 @@ func (mb *MessageBuilder) IsHealthReport(msg *MeshMessage) bool {
 // IsMasterBeacon checks if a message is a master beacon
 func (mb *MessageBuilder) IsMasterBeacon(msg *MeshMessage) bool {
 	return msg.MessageType == MessageTypeMasterBeacon
-}
-
-// GetAdapterTypeName returns a human-readable name for an adapter type
-func GetAdapterTypeName(adapterType int32) string {
-	switch adapterType {
-	case AdapterTypeUnknown:
-		return "Unknown"
-	case AdapterTypePIR:
-		return "PIR"
-	case AdapterTypeWIFI:
-		return "WiFi"
-	case AdapterTypeLED:
-		return "LED"
-	case AdapterTypeSerial:
-		return "Serial"
-	default:
-		return fmt.Sprintf("Unknown(%d)", adapterType)
-	}
 }

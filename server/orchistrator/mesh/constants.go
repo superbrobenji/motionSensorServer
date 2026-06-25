@@ -1,5 +1,7 @@
 package mesh
 
+import "fmt"
+
 // Message Types
 const (
 	MessageTypeAdapterData        uint32 = 0 // Normal adapter-originated data
@@ -31,10 +33,35 @@ const (
 )
 
 // Broadcast MAC address (all FF bytes)
-var BroadcastMAC = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+var broadcastMAC = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+
+// BroadcastMACBytes returns a copy of the broadcast MAC address.
+func BroadcastMACBytes() []byte {
+	cp := make([]byte, MACAddressLength)
+	copy(cp, broadcastMAC)
+	return cp
+}
 
 // MAC address length
 const MACAddressLength = 6
 
 // Maximum data payload length
 const MaxDataLength = 12
+
+// GetAdapterTypeName returns a human-readable name for an adapter type.
+func GetAdapterTypeName(adapterType int32) string {
+	switch adapterType {
+	case AdapterTypeUnknown:
+		return "Unknown"
+	case AdapterTypePIR:
+		return "PIR"
+	case AdapterTypeWIFI:
+		return "WiFi"
+	case AdapterTypeLED:
+		return "LED"
+	case AdapterTypeSerial:
+		return "Serial"
+	default:
+		return fmt.Sprintf("Unknown(%d)", adapterType)
+	}
+}
