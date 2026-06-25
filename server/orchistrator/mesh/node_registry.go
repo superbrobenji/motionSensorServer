@@ -2,7 +2,11 @@ package mesh
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -128,6 +132,94 @@ func (nr *NodeRegistry) NodeCount() int {
 	nr.mu.RLock()
 	defer nr.mu.RUnlock()
 	return len(nr.nodes)
+}
+
+type persistedNode struct {
+	MAC         string    `json:"mac"`
+	AdapterType int32     `json:"adapterType"`
+	Uptime      uint32    `json:"uptime"`
+	LastSeen    time.Time `json:"lastSeen"`
+	HopCount    uint32    `json:"hopCount"`
+}
+
+// Persist saves the registry to a JSON file at path.
+func (nr *NodeRegistry) Persist(path string) error {
+	nr.mu.RLock()
+	entries := make([]persistedNode, 0, len(nr.nodes))
+	for _, n := range nr.nodes {
+		entries = append(entries, persistedNode{
+			MAC:         n.MACString,
+			AdapterType: n.AdapterType,
+			Uptime:      n.Uptime,
+			LastSeen:    n.LastSeen,
+			HopCount:    n.HopCount,
+		})
+	}
+	nr.mu.RUnlock()
+
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal nodes: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("create dirs for %s: %w", path, err)
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+// Load reads a persisted registry from a JSON file. Missing file = empty registry (not an error).
+func (nr *NodeRegistry) Load(path string) error {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var entries []persistedNode
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return fmt.Errorf("unmarshal nodes: %w", err)
+	}
+
+	nr.mu.Lock()
+	defer nr.mu.Unlock()
+	for _, e := range entries {
+		mac, err := StringToMAC(e.MAC)
+		if err != nil {
+			log.Printf("[NodeRegistry] Skipping invalid MAC %s: %v", e.MAC, err)
+			continue
+		}
+		nr.nodes[e.MAC] = &NodeInfo{
+			MAC:         mac,
+			MACString:   e.MAC,
+			AdapterType: e.AdapterType,
+			Uptime:      e.Uptime,
+			LastSeen:    e.LastSeen,
+			HopCount:    e.HopCount,
+		}
+	}
+	log.Printf("[NodeRegistry] Loaded %d nodes from %s", len(entries), path)
+	return nil
+}
+
+// PersistLoop saves the registry every interval. Run as a goroutine.
+func (nr *NodeRegistry) PersistLoop(path string, interval time.Duration, stop <-chan struct{}) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			if err := nr.Persist(path); err != nil {
+				log.Printf("[NodeRegistry] Failed to persist: %v", err)
+			}
+		case <-stop:
+			if err := nr.Persist(path); err != nil {
+				log.Printf("[NodeRegistry] Final persist failed: %v", err)
+			}
+			return
+		}
+	}
 }
 
 // macToString converts a MAC address byte slice to a string representation
