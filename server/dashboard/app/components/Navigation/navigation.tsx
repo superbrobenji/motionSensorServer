@@ -4,6 +4,7 @@ export function Navigation() {
   const pages = [
     { pageName: "Home", route: "/" },
     { pageName: "Nodes", route: "/nodes" },
+    { pageName: "Enrollments", route: "/enrollments" },
     { pageName: "Server", route: "/server" },
   ];
   return (

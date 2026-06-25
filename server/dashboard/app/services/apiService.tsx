@@ -1,3 +1,5 @@
+import type { IEnrollment } from "../interfaces/IApiService";
+
 const HOST_URL = "http://localhost:8080/";
 
 type ServiceName =
@@ -131,6 +133,50 @@ export async function dev_ApiService<ApiResponse>(
   };
 
   return dev_endpoints[service] as ApiResponse;
+}
+
+// Enrollment API functions
+
+export async function getPendingEnrollments(): Promise<IEnrollment[]> {
+  const res = await fetch(`${HOST_URL}api/enrollments/pending`);
+  if (!res.ok) throw new Error("Failed to fetch pending enrollments");
+  const body = await res.json();
+  return body.data ?? [];
+}
+
+export async function getAllEnrollments(): Promise<IEnrollment[]> {
+  const res = await fetch(`${HOST_URL}api/enrollments`);
+  if (!res.ok) throw new Error("Failed to fetch enrollments");
+  const body = await res.json();
+  return body.data ?? [];
+}
+
+export async function approveEnrollment(mac: string): Promise<void> {
+  const res = await fetch(`${HOST_URL}api/enrollments/${mac}/approve`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const msg =
+      body?.error ??
+      body?.message ??
+      `Failed to approve enrollment for ${mac}`;
+    throw new Error(msg);
+  }
+}
+
+export async function rejectEnrollment(mac: string): Promise<void> {
+  const res = await fetch(`${HOST_URL}api/enrollments/${mac}/reject`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const msg =
+      body?.error ??
+      body?.message ??
+      `Failed to reject enrollment for ${mac}`;
+    throw new Error(msg);
+  }
 }
 
 // Usage examples:
