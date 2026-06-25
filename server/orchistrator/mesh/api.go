@@ -58,6 +58,15 @@ func (api *APIServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	api.router.ServeHTTP(w, r)
 }
 
+// enrollmentResponse is the JSON shape for enrollment list entries.
+type enrollmentResponse struct {
+	MAC        string `json:"mac"`
+	PublicKey  string `json:"publicKey"`
+	Status     int    `json:"status"`
+	ReceivedAt int64  `json:"receivedAt"`
+	ApprovedAt int64  `json:"approvedAt"`
+}
+
 // Response structures
 type APIResponse struct {
 	Success bool        `json:"success"`
@@ -261,13 +270,6 @@ func (api *APIServer) stopServer(w http.ResponseWriter, r *http.Request) {
 // getPendingEnrollments returns all nodes awaiting enrollment approval
 func (api *APIServer) getPendingEnrollments(w http.ResponseWriter, r *http.Request) {
 	pending := api.meshServer.GetPendingEnrollments()
-	type enrollmentResponse struct {
-		MAC        string `json:"mac"`
-		PublicKey  string `json:"publicKey"`
-		Status     int    `json:"status"`
-		ReceivedAt int64  `json:"receivedAt"`
-		ApprovedAt int64  `json:"approvedAt"`
-	}
 	out := make([]enrollmentResponse, 0, len(pending))
 	for _, n := range pending {
 		out = append(out, enrollmentResponse{
@@ -287,13 +289,6 @@ func (api *APIServer) getPendingEnrollments(w http.ResponseWriter, r *http.Reque
 // getAllEnrollments returns all enrollment records (pending, approved, rejected)
 func (api *APIServer) getAllEnrollments(w http.ResponseWriter, r *http.Request) {
 	all := api.meshServer.GetAuthRegistry().GetAll()
-	type enrollmentResponse struct {
-		MAC        string `json:"mac"`
-		PublicKey  string `json:"publicKey"`
-		Status     int    `json:"status"`
-		ReceivedAt int64  `json:"receivedAt"`
-		ApprovedAt int64  `json:"approvedAt"`
-	}
 	out := make([]enrollmentResponse, 0, len(all))
 	for _, n := range all {
 		out = append(out, enrollmentResponse{
