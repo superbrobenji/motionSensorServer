@@ -23,6 +23,19 @@ const (
 	OpHealthReport byte = 0xB1 // Node → server health status
 )
 
+// Enrollment Serial Opcodes (raw frames, not protobuf-encoded)
+const (
+	OpEnrollmentReq     byte = 0xC0 // New node → master → server: public key announcement
+	OpEnrollmentApprove byte = 0xC1 // Server → master → node: enrollment approved
+	OpEnrollmentReject  byte = 0xC2 // Server → master → node: enrollment rejected
+)
+
+// Enrollment Message Type Constants
+const (
+	MessageTypeEnrollment uint32 = 2 // New node → master: public key announcement
+	MessageTypeJoinAck    uint32 = 3 // Master → new node: enrollment approved
+)
+
 // Broadcast MAC address (all FF bytes)
 var BroadcastMAC = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 

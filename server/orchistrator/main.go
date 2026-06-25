@@ -22,7 +22,13 @@ func main() {
 	serialPort := flag.String("serial", "/dev/ttyUSB0", "Serial port for mesh communication")
 	baudRate := flag.Int("baud", 115200, "Serial baud rate")
 	apiPort := flag.Int("port", 8080, "HTTP API port")
+	authRegistry := flag.String("auth-registry", "data/nodeauth.json", "Path to node auth registry JSON")
 	flag.Parse()
+
+	// Ensure data directory exists for auth registry
+	if err := os.MkdirAll("data", 0750); err != nil {
+		log.Printf("Warning: Failed to create data directory: %v", err)
+	}
 
 	log.Printf("Starting Planetopia Motion Sensor Server")
 	log.Printf("Serial: %s @ %d baud", *serialPort, *baudRate)
@@ -58,10 +64,11 @@ func main() {
 
 	// Setup mesh server
 	meshConfig := mesh.MeshServerConfig{
-		SerialPort:    *serialPort,
-		BaudRate:      *baudRate,
-		HealthTimeout: 30 * time.Second,
-		EventStore:    eventStore,
+		SerialPort:       *serialPort,
+		BaudRate:         *baudRate,
+		HealthTimeout:    30 * time.Second,
+		EventStore:       eventStore,
+		AuthRegistryPath: *authRegistry,
 	}
 
 	meshServer := mesh.NewMeshServer(meshConfig)

@@ -149,6 +149,25 @@ func (s *SerialComm) ReadFrame() (*MeshMessage, error) {
 	return &msg, nil
 }
 
+// WriteRaw writes raw bytes directly to the serial port (used for non-protobuf opcode frames).
+func (s *SerialComm) WriteRaw(data []byte) error {
+	_, err := s.port.Write(data)
+	return err
+}
+
+// TryReadEnrollmentFrame inspects a raw data slice for enrollment opcode frames.
+// Returns (opcode, payload, true) if an enrollment opcode is found; (0, nil, false) otherwise.
+func (s *SerialComm) TryReadEnrollmentFrame(data []byte) (uint8, []byte, bool) {
+	if len(data) == 0 {
+		return 0, nil, false
+	}
+	opcode := data[0]
+	if opcode == OpEnrollmentReq || opcode == OpEnrollmentApprove || opcode == OpEnrollmentReject {
+		return opcode, data[1:], true
+	}
+	return 0, nil, false
+}
+
 // Close closes the serial port
 func (s *SerialComm) Close() error {
 	return s.port.Close()
