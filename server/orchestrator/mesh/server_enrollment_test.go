@@ -102,3 +102,12 @@ func TestRejectEnrollment_SendsJoinAckWithEmptyPubKey(t *testing.T) {
 		t.Errorf("PublicKey should be absent for rejection, got %d bytes", len(msg.PublicKey))
 	}
 }
+
+func TestApproveEnrollment_NilSerialComm_Succeeds(t *testing.T) {
+	ms := newTestMeshServer(t) // serialComm is nil by default
+	macStr, _ := enrollTestNode(t, ms)
+
+	if err := ms.ApproveEnrollment(macStr); err != nil {
+		t.Fatalf("ApproveEnrollment with nil serialComm returned error: %v", err)
+	}
+}

@@ -428,10 +428,6 @@ func (ms *MeshServer) handleMasterBeacon(msg *MeshMessage) error {
 // A non-nil serialComm is required to actually notify the node; if serial is
 // not connected the approval is persisted but the node receives no response.
 func (ms *MeshServer) ApproveEnrollment(macStr string) error {
-	mac, err := nodeauth.ParseMAC(macStr)
-	if err != nil {
-		return fmt.Errorf("invalid MAC string: %w", err)
-	}
 	node, err := ms.authRegistry.Approve(macStr)
 	if err != nil {
 		return err
@@ -439,7 +435,7 @@ func (ms *MeshServer) ApproveEnrollment(macStr string) error {
 	if ms.serialComm != nil {
 		ackMsg := &MeshMessage{
 			MessageType:      MessageTypeJoinAck,
-			OriginMacAddress: mac[:],
+			OriginMacAddress: node.MAC[:],
 			PublicKey:        node.PublicKey[:],
 		}
 		if err := ms.serialComm.WriteFrame(ackMsg); err != nil {
