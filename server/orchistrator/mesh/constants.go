@@ -2,9 +2,10 @@ package mesh
 
 // Message Types
 const (
-	MessageTypeAdapterData      uint32 = 0 // Normal adapter-originated data
-	MessageTypeMasterBeacon     uint32 = 1 // Mesh-internal heartbeat from master
+	MessageTypeAdapterData        uint32 = 0 // Normal adapter-originated data
+	MessageTypeMasterBeacon       uint32 = 1 // Mesh-internal heartbeat from master
 	MessageTypeSerialCmdBroadcast uint32 = 3 // Server→device serial command to broadcast adapter data
+	// NOTE: shares wire value 3 with MessageTypeJoinAck. Directional: SerialCmdBroadcast is server→device, JoinAck is master→node.
 )
 
 // Adapter Types (maps to firmware enum adapter_types)
@@ -23,17 +24,10 @@ const (
 	OpHealthReport byte = 0xB1 // Node → server health status
 )
 
-// Enrollment Serial Opcodes (raw frames, not protobuf-encoded)
-const (
-	OpEnrollmentReq     byte = 0xC0 // New node → master → server: public key announcement
-	OpEnrollmentApprove byte = 0xC1 // Server → master → node: enrollment approved
-	OpEnrollmentReject  byte = 0xC2 // Server → master → node: enrollment rejected
-)
-
 // Enrollment Message Type Constants
 const (
 	MessageTypeEnrollment uint32 = 2 // New node → master: public key announcement
-	MessageTypeJoinAck    uint32 = 3 // Master → new node: enrollment approved
+	MessageTypeJoinAck    uint32 = 3 // Master → new node: enrollment approved/rejected
 )
 
 // Broadcast MAC address (all FF bytes)
