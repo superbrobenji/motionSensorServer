@@ -39,7 +39,7 @@ func main() {
 	log.Printf("Kafka Broker: %s", broker)
 
 	// Setup event store with retry logic
-	var eventStore EventStore.EventStore_interface
+	var eventStore EventStore.EventStoreInterface
 	maxRetries := 3
 	retryDelay := 1 * time.Second
 	
@@ -133,6 +133,13 @@ func main() {
 	if meshServer.IsRunning() {
 		if err := meshServer.Stop(); err != nil {
 			log.Printf("Error stopping mesh server: %v", err)
+		}
+	}
+
+	// Close event store
+	if eventStore != nil {
+		if err := eventStore.Close(); err != nil {
+			log.Printf("Error closing event store: %v", err)
 		}
 	}
 
