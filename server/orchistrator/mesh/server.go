@@ -138,7 +138,11 @@ func (ms *MeshServer) Start() error {
 
 	// Start auth registry persistence loop
 	if ms.authPath != "" {
-		go ms.authRegistry.PersistLoop(ms.authPath, 30*time.Second, ms.stopPersist)
+		ms.wg.Add(1)
+		go func() {
+			defer ms.wg.Done()
+			ms.authRegistry.PersistLoop(ms.authPath, 30*time.Second, ms.stopPersist)
+		}()
 	}
 
 	// Start node registry persistence loop

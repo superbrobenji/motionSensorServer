@@ -3,6 +3,7 @@ package mesh
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -170,7 +171,7 @@ func (nr *NodeRegistry) Persist(path string) error {
 // Load reads a persisted registry from a JSON file. Missing file = empty registry (not an error).
 func (nr *NodeRegistry) Load(path string) error {
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
