@@ -276,3 +276,40 @@ func TestGetAdapterTypeName(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeRegistryPersistence(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/nodes.json"
+
+	registry := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	registry.UpdateNode(mac, AdapterTypePIR, 1000, 1)
+
+	if err := registry.Persist(path); err != nil {
+		t.Fatalf("Persist failed: %v", err)
+	}
+
+	registry2 := NewNodeRegistry()
+	if err := registry2.Load(path); err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	node, exists := registry2.GetNode(mac)
+	if !exists {
+		t.Fatal("expected node to exist after load")
+	}
+	if node.AdapterType != AdapterTypePIR {
+		t.Errorf("expected AdapterTypePIR, got %d", node.AdapterType)
+	}
+	if node.Uptime != 1000 {
+		t.Errorf("expected uptime 1000, got %d", node.Uptime)
+	}
+}
+
+func TestNodeRegistryLoad_MissingFile(t *testing.T) {
+	registry := NewNodeRegistry()
+	err := registry.Load("/tmp/does-not-exist-xyzzy.json")
+	if err != nil {
+		t.Errorf("expected no error for missing file, got %v", err)
+	}
+}
