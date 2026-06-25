@@ -10,6 +10,16 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const maxRequestBodyBytes = 64 * 1024 // 64KB
+
+func isValidAdapterType(t int32) bool {
+	switch t {
+	case AdapterTypeUnknown, AdapterTypePIR, AdapterTypeWIFI, AdapterTypeLED, AdapterTypeSerial:
+		return true
+	}
+	return false
+}
+
 // APIServer provides HTTP API for mesh network control
 type APIServer struct {
 	meshServer *MeshServer
@@ -142,24 +152,30 @@ func (api *APIServer) getNode(w http.ResponseWriter, r *http.Request) {
 func (api *APIServer) configureNode(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	macStr := vars["mac"]
-	
+
 	mac, err := StringToMAC(macStr)
 	if err != nil {
 		api.writeError(w, http.StatusBadRequest, fmt.Sprintf("Invalid MAC address: %v", err))
 		return
 	}
-	
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req ConfigureRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		api.writeError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
 		return
 	}
-	
+
+	if !isValidAdapterType(req.AdapterType) {
+		api.writeError(w, http.StatusBadRequest, fmt.Sprintf("Invalid adapterType: %d", req.AdapterType))
+		return
+	}
+
 	if err := api.meshServer.ConfigureNode(mac, req.AdapterType); err != nil {
 		api.writeError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to configure node: %v", err))
 		return
 	}
-	
+
 	api.writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: fmt.Sprintf("Node %s configured to adapter type %s", macStr, GetAdapterTypeName(req.AdapterType)),
@@ -168,17 +184,23 @@ func (api *APIServer) configureNode(w http.ResponseWriter, r *http.Request) {
 
 // configureAllNodes configures all nodes' adapter type
 func (api *APIServer) configureAllNodes(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req ConfigureRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		api.writeError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
 		return
 	}
-	
+
+	if !isValidAdapterType(req.AdapterType) {
+		api.writeError(w, http.StatusBadRequest, fmt.Sprintf("Invalid adapterType: %d", req.AdapterType))
+		return
+	}
+
 	if err := api.meshServer.ConfigureAllNodes(req.AdapterType); err != nil {
 		api.writeError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to configure all nodes: %v", err))
 		return
 	}
-	
+
 	api.writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Message: fmt.Sprintf("All nodes configured to adapter type %s", GetAdapterTypeName(req.AdapterType)),
@@ -219,6 +241,7 @@ func (api *APIServer) getStatus(w http.ResponseWriter, r *http.Request) {
 
 // broadcastData broadcasts data to all nodes
 func (api *APIServer) broadcastData(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	var req BroadcastRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		api.writeError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
