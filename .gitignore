@@ -1,0 +1,22 @@
+# Worktrees
+.worktrees/
+
+# Build artifacts
+*.exe
+*.cpuprofile
+
+# Go build output
+server/orchistrator/main
+server/orchestrator/main
+
+# Node
+node_modules/
+server/dashboard/build/
+
+# Environment files
+server/.env
+.env
+
+# Runtime data
+server/orchistrator/data/
+server/orchestrator/data/
