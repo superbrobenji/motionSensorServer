@@ -34,17 +34,23 @@ func (api *APIServer) setupRoutes() {
 	api.router.HandleFunc("/nodes/{mac}", api.getNode).Methods("GET")
 	api.router.HandleFunc("/nodes/{mac}/configure", api.configureNode).Methods("POST")
 	api.router.HandleFunc("/nodes/configure-all", api.configureAllNodes).Methods("POST")
-	
+
 	// Health and monitoring
 	api.router.HandleFunc("/health/request", api.requestHealth).Methods("POST")
 	api.router.HandleFunc("/status", api.getStatus).Methods("GET")
-	
+
 	// Data broadcasting
 	api.router.HandleFunc("/broadcast", api.broadcastData).Methods("POST")
-	
+
 	// Server control
 	api.router.HandleFunc("/server/start", api.startServer).Methods("POST")
 	api.router.HandleFunc("/server/stop", api.stopServer).Methods("POST")
+
+	// Enrollment management
+	api.router.HandleFunc("/api/enrollments/pending", api.getPendingEnrollments).Methods("GET")
+	api.router.HandleFunc("/api/enrollments", api.getAllEnrollments).Methods("GET")
+	api.router.HandleFunc("/api/enrollments/{mac}/approve", api.approveEnrollment).Methods("POST")
+	api.router.HandleFunc("/api/enrollments/{mac}/reject", api.rejectEnrollment).Methods("POST")
 }
 
 // ServeHTTP implements the http.Handler interface
@@ -252,10 +258,88 @@ func (api *APIServer) stopServer(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getPendingEnrollments returns all nodes awaiting enrollment approval
+func (api *APIServer) getPendingEnrollments(w http.ResponseWriter, r *http.Request) {
+	pending := api.meshServer.GetPendingEnrollments()
+	type enrollmentResponse struct {
+		MAC        string `json:"mac"`
+		PublicKey  string `json:"publicKey"`
+		Status     int    `json:"status"`
+		ReceivedAt int64  `json:"receivedAt"`
+		ApprovedAt int64  `json:"approvedAt"`
+	}
+	out := make([]enrollmentResponse, 0, len(pending))
+	for _, n := range pending {
+		out = append(out, enrollmentResponse{
+			MAC:        n.MACString,
+			PublicKey:  fmt.Sprintf("%x", n.PublicKey),
+			Status:     int(n.Status),
+			ReceivedAt: n.ReceivedAt.Unix(),
+			ApprovedAt: n.ApprovedAt.Unix(),
+		})
+	}
+	api.writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data:    out,
+	})
+}
+
+// getAllEnrollments returns all enrollment records (pending, approved, rejected)
+func (api *APIServer) getAllEnrollments(w http.ResponseWriter, r *http.Request) {
+	all := api.meshServer.GetAuthRegistry().GetAll()
+	type enrollmentResponse struct {
+		MAC        string `json:"mac"`
+		PublicKey  string `json:"publicKey"`
+		Status     int    `json:"status"`
+		ReceivedAt int64  `json:"receivedAt"`
+		ApprovedAt int64  `json:"approvedAt"`
+	}
+	out := make([]enrollmentResponse, 0, len(all))
+	for _, n := range all {
+		out = append(out, enrollmentResponse{
+			MAC:        n.MACString,
+			PublicKey:  fmt.Sprintf("%x", n.PublicKey),
+			Status:     int(n.Status),
+			ReceivedAt: n.ReceivedAt.Unix(),
+			ApprovedAt: n.ApprovedAt.Unix(),
+		})
+	}
+	api.writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Data:    out,
+	})
+}
+
+// approveEnrollment approves a pending node enrollment
+func (api *APIServer) approveEnrollment(w http.ResponseWriter, r *http.Request) {
+	mac := mux.Vars(r)["mac"]
+	if err := api.meshServer.ApproveEnrollment(mac); err != nil {
+		api.writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	api.writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Message: fmt.Sprintf("Enrollment approved for %s", mac),
+	})
+}
+
+// rejectEnrollment rejects a pending node enrollment
+func (api *APIServer) rejectEnrollment(w http.ResponseWriter, r *http.Request) {
+	mac := mux.Vars(r)["mac"]
+	if err := api.meshServer.RejectEnrollment(mac); err != nil {
+		api.writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	api.writeJSON(w, http.StatusOK, APIResponse{
+		Success: true,
+		Message: fmt.Sprintf("Enrollment rejected for %s", mac),
+	})
+}
+
 // StartAPIServer starts the HTTP API server
 func StartAPIServer(meshServer *MeshServer, port int) error {
 	api := NewAPIServer(meshServer)
-	
+
 	log.Printf("Starting API server on port %d", port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), api)
 }
