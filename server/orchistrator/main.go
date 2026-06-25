@@ -94,9 +94,15 @@ func main() {
 		})
 	}
 
+	// Read API key from environment
+	apiKey := os.Getenv("API_KEY")
+	if apiKey == "" {
+		log.Printf("Warning: API_KEY is not set — HTTP API will run without authentication")
+	}
+
 	// Start HTTP API server
 	go func() {
-		if err := mesh.StartAPIServer(meshServer, *apiPort); err != nil {
+		if err := mesh.StartAPIServer(meshServer, *apiPort, apiKey); err != nil {
 			log.Printf("API server error: %v", err)
 		}
 	}()

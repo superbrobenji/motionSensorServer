@@ -17,12 +17,14 @@ type APIServer struct {
 }
 
 // NewAPIServer creates a new API server
-func NewAPIServer(meshServer *MeshServer) *APIServer {
+func NewAPIServer(meshServer *MeshServer, apiKey string) *APIServer {
 	api := &APIServer{
 		meshServer: meshServer,
 		router:     mux.NewRouter(),
 	}
-
+	if apiKey != "" {
+		api.router.Use(AuthMiddleware(apiKey))
+	}
 	api.setupRoutes()
 	return api
 }
@@ -372,8 +374,8 @@ func (api *APIServer) handleSetTxPower(w http.ResponseWriter, r *http.Request) {
 }
 
 // StartAPIServer starts the HTTP API server
-func StartAPIServer(meshServer *MeshServer, port int) error {
-	api := NewAPIServer(meshServer)
+func StartAPIServer(meshServer *MeshServer, port int, apiKey string) error {
+	api := NewAPIServer(meshServer, apiKey)
 
 	log.Printf("Starting API server on port %d", port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), api)

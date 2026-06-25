@@ -1,6 +1,11 @@
 import type { IEnrollment, ITxPowerStatus } from "../interfaces/IApiService";
 
-const HOST_URL = "http://localhost:8080/";
+const HOST_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+const API_KEY = import.meta.env.VITE_API_KEY ?? "";
+
+function authHeaders(): HeadersInit {
+  return API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {};
+}
 
 type ServiceName =
   | "getNodes"
@@ -34,7 +39,13 @@ export default async function ApiService<ApiResponse>(
   options?: RequestInit
 ): Promise<ApiResponse> {
   const url = `${HOST_URL}${endpoints[service]}`;
-  const response: Response = await fetch(url, options);
+  const response: Response = await fetch(url, {
+    ...options,
+    headers: {
+      ...authHeaders(),
+      ...(options?.headers ?? {}),
+    },
+  });
   if (!response.ok) {
     throw new Error(
       `API error: ${response.status ?? "Unknown Error occurred"}`
@@ -138,22 +149,27 @@ export async function dev_ApiService<ApiResponse>(
 // Enrollment API functions
 
 export async function getPendingEnrollments(): Promise<IEnrollment[]> {
-  const res = await fetch(`${HOST_URL}api/enrollments/pending`);
+  const res = await fetch(`${HOST_URL}/api/enrollments/pending`, {
+    headers: { ...authHeaders() },
+  });
   if (!res.ok) throw new Error("Failed to fetch pending enrollments");
   const body = await res.json();
   return body.data ?? [];
 }
 
 export async function getAllEnrollments(): Promise<IEnrollment[]> {
-  const res = await fetch(`${HOST_URL}api/enrollments`);
+  const res = await fetch(`${HOST_URL}/api/enrollments`, {
+    headers: { ...authHeaders() },
+  });
   if (!res.ok) throw new Error("Failed to fetch enrollments");
   const body = await res.json();
   return body.data ?? [];
 }
 
 export async function approveEnrollment(mac: string): Promise<void> {
-  const res = await fetch(`${HOST_URL}api/enrollments/${mac}/approve`, {
+  const res = await fetch(`${HOST_URL}/api/enrollments/${mac}/approve`, {
     method: "POST",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -166,8 +182,9 @@ export async function approveEnrollment(mac: string): Promise<void> {
 }
 
 export async function rejectEnrollment(mac: string): Promise<void> {
-  const res = await fetch(`${HOST_URL}api/enrollments/${mac}/reject`, {
+  const res = await fetch(`${HOST_URL}/api/enrollments/${mac}/reject`, {
     method: "POST",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -182,16 +199,18 @@ export async function rejectEnrollment(mac: string): Promise<void> {
 // TX power API functions
 
 export async function getTxPower(): Promise<ITxPowerStatus> {
-  const res = await fetch(`${HOST_URL}api/tx-power`);
+  const res = await fetch(`${HOST_URL}/api/tx-power`, {
+    headers: { ...authHeaders() },
+  });
   if (!res.ok) throw new Error("Failed to fetch TX power preset");
   const body = await res.json();
   return body.data as ITxPowerStatus;
 }
 
 export async function setTxPower(preset: number): Promise<void> {
-  const res = await fetch(`${HOST_URL}api/tx-power`, {
+  const res = await fetch(`${HOST_URL}/api/tx-power`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ preset }),
   });
   if (!res.ok) {
