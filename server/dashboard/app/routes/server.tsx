@@ -22,7 +22,7 @@ export async function loader({ request: _request }: Route.LoaderArgs) {
 
 export default function Server({ loaderData }: { loaderData?: ServerStatus }) {
   const fetcher = useFetcher<ServerStatus>();
-  const [serverData, setServerData] = useState<ServerStatus>(
+  const [serverData] = useState<ServerStatus>(
     loaderData ?? { running: false, totalNodes: 0, onlineNodes: 0, timestamp: 0 }
   );
 
