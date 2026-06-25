@@ -4,7 +4,7 @@ package mesh;
 option go_package = "github.com/superbrobenji/motionServer/mesh";
 
 message MeshMessage {
-  uint32 messageType       = 1;  // 0=ADAPTER_DATA, 1=MASTER_BEACON, 2=ENROLLMENT, 3=JOIN_ACK
+  uint32 messageType       = 1;  // 0=ADAPTER_DATA, 1=MASTER_BEACON, 2=ENROLLMENT, 3=SERIAL_CMD_BROADCAST (server→device), 4=JOIN_ACK (server→device)
   sint32 dataType          = 2;  // zigzag: -1=UNKNOWN, 0=PIR, 1=WIFI, 2=LED, 3=SERIAL
   bytes  originMacAddress  = 3;  // 6 bytes
   bytes  targetMacAddress  = 4;  // 6 bytes

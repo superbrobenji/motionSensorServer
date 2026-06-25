@@ -3,7 +3,6 @@ package mesh
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -424,14 +423,28 @@ func (ms *MeshServer) handleMasterBeacon(msg *MeshMessage) error {
 	return nil
 }
 
-// ApproveEnrollment approves a pending node enrollment.
-// NOTE: Sending a JOIN_ACK to the node requires a server Curve25519 keypair (for ECDH).
-// The server keypair is not yet implemented (deferred to a later task). Until it is,
-// this function returns an error immediately without sending any JoinAck frame,
-// making the incompleteness explicit and preventing a silently broken ECDH exchange.
-// The HTTP API (Task 2) will surface this error to the operator.
+// ApproveEnrollment approves a pending node enrollment and sends a JOIN_ACK
+// frame over serial with the node's Curve25519 public key echoed back.
 func (ms *MeshServer) ApproveEnrollment(macStr string) error {
-	return errors.New("server keypair not initialized: enrollment approval not yet supported")
+	node, err := ms.authRegistry.Approve(macStr)
+	if err != nil {
+		return err
+	}
+	if ms.serialComm != nil {
+		ackMsg := &MeshMessage{
+			MessageType:      MessageTypeJoinAck,
+			OriginMacAddress: node.MAC[:],
+			PublicKey:        node.PublicKey[:],
+		}
+		if err := ms.serialComm.WriteFrame(ackMsg); err != nil {
+			slog.Warn("Failed to send JOIN_ACK approval frame", "mac", macStr, "error", err)
+		}
+	}
+	slog.Info("Enrollment approved", "mac", macStr)
+	if ms.authPath != "" {
+		return ms.authRegistry.Persist(ms.authPath)
+	}
+	return nil
 }
 
 // RejectEnrollment rejects a pending enrollment request and notifies the master.

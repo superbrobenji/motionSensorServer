@@ -6,8 +6,7 @@ import "fmt"
 const (
 	MessageTypeAdapterData        uint32 = 0 // Normal adapter-originated data
 	MessageTypeMasterBeacon       uint32 = 1 // Mesh-internal heartbeat from master
-	MessageTypeSerialCmdBroadcast uint32 = 3 // Server→device serial command to broadcast adapter data
-	// NOTE: shares wire value 3 with MessageTypeJoinAck. Directional: SerialCmdBroadcast is server→device, JoinAck is master→node.
+	MessageTypeSerialCmdBroadcast uint32 = 3 // Server→device: serial command to broadcast adapter data
 )
 
 // Adapter Types (maps to firmware enum adapter_types)
@@ -28,8 +27,8 @@ const (
 
 // Enrollment Message Type Constants
 const (
-	MessageTypeEnrollment uint32 = 2 // New node → master: public key announcement
-	MessageTypeJoinAck    uint32 = 3 // Master → new node: enrollment approved/rejected
+	MessageTypeEnrollment uint32 = 2 // Node→master: public key announcement
+	MessageTypeJoinAck    uint32 = 4 // Server→master→node: enrollment approved (pubkey present) or rejected (pubkey absent)
 )
 
 // Broadcast MAC address (all FF bytes)
