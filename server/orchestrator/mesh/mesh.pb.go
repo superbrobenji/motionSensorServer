@@ -23,7 +23,7 @@ const (
 
 type MeshMessage struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	MessageType       uint32                 `protobuf:"varint,1,opt,name=messageType,proto3" json:"messageType,omitempty"`            // 0=ADAPTER_DATA, 1=MASTER_BEACON, 2=ENROLLMENT, 3=JOIN_ACK
+	MessageType       uint32                 `protobuf:"varint,1,opt,name=messageType,proto3" json:"messageType,omitempty"`            // 0=ADAPTER_DATA, 1=MASTER_BEACON, 2=ENROLLMENT, 3=SERIAL_CMD_BROADCAST (server→device), 4=JOIN_ACK (server→device)
 	DataType          int32                  `protobuf:"zigzag32,2,opt,name=dataType,proto3" json:"dataType,omitempty"`                // zigzag: -1=UNKNOWN, 0=PIR, 1=WIFI, 2=LED, 3=SERIAL
 	OriginMacAddress  []byte                 `protobuf:"bytes,3,opt,name=originMacAddress,proto3" json:"originMacAddress,omitempty"`   // 6 bytes
 	TargetMacAddress  []byte                 `protobuf:"bytes,4,opt,name=targetMacAddress,proto3" json:"targetMacAddress,omitempty"`   // 6 bytes
