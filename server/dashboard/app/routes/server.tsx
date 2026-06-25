@@ -1,8 +1,8 @@
 import { useFetcher } from "react-router";
 import type { Route } from "../+types/root";
-import ApiService, { dev_ApiService } from "../services/apiService";
-import type { IApiResponse } from "~/interfaces/IApiService";
-import { useState } from "react";
+import ApiService, { dev_ApiService, getTxPower, setTxPower } from "../services/apiService";
+import type { IApiResponse, ITxPowerStatus } from "~/interfaces/IApiService";
+import { useState, useEffect } from "react";
 import { formatTime } from "~/services/formatDateTime";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -12,6 +12,66 @@ export async function loader({ request }: Route.LoaderArgs) {
   console.log("SERVER STATUS: ", status);
 
   return status;
+}
+
+const TX_POWER_OPTIONS = [
+  { value: 0, label: "Short Range (2dBm) — same room" },
+  { value: 1, label: "Indoor (14dBm) — through walls" },
+  { value: 2, label: "Outdoor (20dBm) — maximum range" },
+];
+
+function TxPowerSelector() {
+  const [current, setCurrent] = useState<ITxPowerStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getTxPower()
+      .then(setCurrent)
+      .catch(() => {/* server may not be reachable on load */});
+  }, []);
+
+  const handleChange = async (preset: number) => {
+    setLoading(true);
+    try {
+      await setTxPower(preset);
+      setCurrent((prev) =>
+        prev
+          ? { ...prev, preset, name: TX_POWER_OPTIONS[preset]?.label ?? "" }
+          : null
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 p-4 border border-emerald-500 rounded">
+      <h2 className="text-lg font-bold mb-2">TX Power Preset</h2>
+      <p className="text-sm text-emerald-200 mb-3">
+        Sets transmit power on all nodes. Applies immediately — no reboot needed.
+      </p>
+      {TX_POWER_OPTIONS.map((opt) => (
+        <label
+          key={opt.value}
+          className="flex items-center gap-2 mb-2 cursor-pointer">
+          <input
+            type="radio"
+            name="txPower"
+            value={opt.value}
+            checked={current?.preset === opt.value}
+            onChange={() => handleChange(opt.value)}
+            disabled={loading}
+          />
+          {opt.label}
+        </label>
+      ))}
+      {loading && (
+        <p className="text-sm text-blue-300 animate-pulse">
+          Applying to all nodes...
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function Server({ loaderData }: { loaderData?: IApiResponse }) {
@@ -57,6 +117,7 @@ export default function Server({ loaderData }: { loaderData?: IApiResponse }) {
         </button>
       </fetcher.Form>
       {isSubmitting && <p className="mt-2 animate-pulse">Processing...</p>}
+      <TxPowerSelector />
     </div>
   );
 }

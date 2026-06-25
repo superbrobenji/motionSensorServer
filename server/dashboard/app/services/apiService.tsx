@@ -1,4 +1,4 @@
-import type { IEnrollment } from "../interfaces/IApiService";
+import type { IEnrollment, ITxPowerStatus } from "../interfaces/IApiService";
 
 const HOST_URL = "http://localhost:8080/";
 
@@ -175,6 +175,28 @@ export async function rejectEnrollment(mac: string): Promise<void> {
       body?.error ??
       body?.message ??
       `Failed to reject enrollment for ${mac}`;
+    throw new Error(msg);
+  }
+}
+
+// TX power API functions
+
+export async function getTxPower(): Promise<ITxPowerStatus> {
+  const res = await fetch(`${HOST_URL}api/tx-power`);
+  if (!res.ok) throw new Error("Failed to fetch TX power preset");
+  const body = await res.json();
+  return body.data as ITxPowerStatus;
+}
+
+export async function setTxPower(preset: number): Promise<void> {
+  const res = await fetch(`${HOST_URL}api/tx-power`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ preset }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const msg = body?.error ?? `Failed to set TX power preset to ${preset}`;
     throw new Error(msg);
   }
 }
