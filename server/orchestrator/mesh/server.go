@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -525,6 +526,10 @@ type ApprovalParams struct {
 // ApproveEnrollment approves a pending node enrollment and sends a JOIN_ACK
 // frame over serial with the node's Curve25519 public key echoed back,
 // followed by an OP_NODE_ID_SET frame that assigns the node its logical ID.
+// When params.NodeID > 0 and an existing node already owns that ID (hotswap),
+// unspecified Name/Zone/AdapterType fields are inherited from the old node,
+// the old entry is marked replaced, and an OP_CONFIG_SET is sent if the
+// adapter type was inherited.
 func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) error {
 	node, err := ms.authRegistry.Approve(macStr)
 	if err != nil {
@@ -540,8 +545,33 @@ func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) er
 		}
 	}
 
-	// Assign in node registry (creates entry if not yet seen)
+	// Hotswap detection: explicit nodeId provided and an existing node already owns it.
+	// Inherit unspecified fields from the old node; the old entry is marked replaced.
+	var hotswapOldMAC []byte
+	var inheritedAdapterType int32 = AdapterTypeUnknown // sentinel: no inheritance
+	if params.NodeID > 0 {
+		if oldNode, ok := ms.nodeRegistry.GetNodeByID(params.NodeID); ok &&
+			!bytes.Equal(oldNode.MAC, node.MAC[:]) {
+			hotswapOldMAC = oldNode.MAC
+			if params.Name == "" {
+				params.Name = oldNode.Name
+			}
+			if params.Zone == "" {
+				params.Zone = oldNode.Zone
+			}
+			if params.AdapterTypeStr == "" && oldNode.AdapterType != AdapterTypeUnknown {
+				inheritedAdapterType = oldNode.AdapterType
+			}
+		}
+	}
+
+	// Assign new node in registry (creates entry if first seen)
 	ms.nodeRegistry.AssignNode(node.MAC[:], nodeId, params.Name, params.Zone)
+
+	// Mark old node replaced after new node is assigned (ensures GetNodeByID uniqueness)
+	if hotswapOldMAC != nil {
+		ms.nodeRegistry.MarkReplaced(hotswapOldMAC, macToString(node.MAC[:]))
+	}
 
 	if registryNode, ok := ms.nodeRegistry.GetNode(node.MAC[:]); ok {
 		typeStr := params.AdapterTypeStr
@@ -575,6 +605,16 @@ func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) er
 			}
 			if err := ms.activeOutboundComm().WriteFrame(idMsg); err != nil {
 				slog.Warn("Failed to send OP_NODE_ID_SET", "mac", macStr, "nodeId", nodeId, "error", err)
+			}
+		}
+
+		// Send OP_CONFIG_SET when adapter type was inherited from old node
+		if inheritedAdapterType != AdapterTypeUnknown {
+			configMsg, buildErr := ms.messageBuilder.BuildConfigSetMessage(node.MAC[:], inheritedAdapterType)
+			if buildErr != nil {
+				slog.Warn("Failed to build OP_CONFIG_SET for hotswap", "mac", macStr, "error", buildErr)
+			} else if err := ms.serialComm.WriteFrame(configMsg); err != nil {
+				slog.Warn("Failed to send OP_CONFIG_SET on hotswap", "mac", macStr, "error", err)
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package mesh
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -24,6 +25,19 @@ func enrollTestNode(t *testing.T, ms *MeshServer) (macStr string, pubKey [32]byt
 		t.Fatalf("AddPending failed: %v", err)
 	}
 	return "aabbccddeeff", pubKey
+}
+
+// enrollTestNodeWithMAC adds a pending enrollment for the given MAC address.
+func enrollTestNodeWithMAC(t *testing.T, ms *MeshServer, mac [6]byte) (macStr string, pubKey [32]byte) {
+	t.Helper()
+	for i := range pubKey {
+		pubKey[i] = byte(i + 1)
+	}
+	if err := ms.authRegistry.AddPending(mac, pubKey); err != nil {
+		t.Fatalf("AddPending failed: %v", err)
+	}
+	return fmt.Sprintf("%02x%02x%02x%02x%02x%02x",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]), pubKey
 }
 
 func decodeWrittenFrame(t *testing.T, mock *MockSerialPort) *MeshMessage {
@@ -195,5 +209,108 @@ func TestApproveEnrollment_AutoAssignsNodeId_WhenZero(t *testing.T) {
 	}
 	if node.NodeID == 0 {
 		t.Error("NodeID should be auto-assigned (>0)")
+	}
+}
+
+func TestApproveEnrollment_HotswapInheritsNameZoneAndMarksReplaced(t *testing.T) {
+	ms := newTestMeshServer(t)
+
+	// Old node: assigned with identity, adapter type known from health report
+	oldMAC := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	ms.nodeRegistry.AssignNode(oldMAC, 7, "entrance-left", "lobby")
+	ms.nodeRegistry.UpdateNode(oldMAC, AdapterTypePIR, 3600, 1)
+
+	// New node sends enrollment request
+	newMacStr, _ := enrollTestNodeWithMAC(t, ms, [6]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66})
+
+	// Approve with same nodeId, no explicit overrides
+	if err := ms.ApproveEnrollment(newMacStr, ApprovalParams{NodeID: 7}); err != nil {
+		t.Fatalf("ApproveEnrollment: %v", err)
+	}
+
+	// New node should inherit name and zone from old node
+	newNode, ok := ms.nodeRegistry.GetNodeByID(7)
+	if !ok {
+		t.Fatal("GetNodeByID(7) must return the new node after hotswap")
+	}
+	if newNode.Name != "entrance-left" {
+		t.Errorf("Name = %q, want %q (inherited from old node)", newNode.Name, "entrance-left")
+	}
+	if newNode.Zone != "lobby" {
+		t.Errorf("Zone = %q, want %q (inherited from old node)", newNode.Zone, "lobby")
+	}
+
+	// Old node must be marked replaced and its NodeID cleared
+	oldNode, ok := ms.nodeRegistry.GetNode(oldMAC)
+	if !ok {
+		t.Fatal("old node must still exist in registry after hotswap")
+	}
+	if oldNode.Status != "replaced" {
+		t.Errorf("old node Status = %q, want %q", oldNode.Status, "replaced")
+	}
+	if oldNode.NodeID != 0 {
+		t.Errorf("old node NodeID = %d, want 0 after replacement", oldNode.NodeID)
+	}
+}
+
+func TestApproveEnrollment_HotswapSendsConfigSet(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mockPort := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(mockPort)
+
+	// Old node with PIR adapter type
+	oldMAC := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	ms.nodeRegistry.AssignNode(oldMAC, 7, "entrance-left", "lobby")
+	ms.nodeRegistry.UpdateNode(oldMAC, AdapterTypePIR, 3600, 1)
+
+	newMacStr, _ := enrollTestNodeWithMAC(t, ms, [6]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66})
+
+	if err := ms.ApproveEnrollment(newMacStr, ApprovalParams{NodeID: 7}); err != nil {
+		t.Fatalf("ApproveEnrollment: %v", err)
+	}
+
+	_ = decodeWrittenFrame(t, mockPort) // JOIN_ACK
+	_ = decodeWrittenFrame(t, mockPort) // OP_NODE_ID_SET
+	configMsg := decodeWrittenFrame(t, mockPort) // OP_CONFIG_SET
+
+	if len(configMsg.Data) == 0 || configMsg.Data[0] != byte(OpConfigSet) {
+		t.Errorf("3rd frame opcode = 0x%02x, want 0x%02x (OP_CONFIG_SET)",
+			configMsg.Data[0], OpConfigSet)
+	}
+	if configMsg.Data[7] != byte(AdapterTypePIR) {
+		t.Errorf("OP_CONFIG_SET adapter type = %d, want %d (AdapterTypePIR)",
+			configMsg.Data[7], byte(AdapterTypePIR))
+	}
+}
+
+func TestApproveEnrollment_HotswapExplicitOverrideNotInherited(t *testing.T) {
+	ms := newTestMeshServer(t)
+
+	// Old node with known name, zone, type
+	oldMAC := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	ms.nodeRegistry.AssignNode(oldMAC, 7, "entrance-left", "lobby")
+	ms.nodeRegistry.UpdateNode(oldMAC, AdapterTypePIR, 3600, 1)
+
+	newMacStr, _ := enrollTestNodeWithMAC(t, ms, [6]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66})
+
+	// Explicit overrides provided — should NOT inherit from old node
+	if err := ms.ApproveEnrollment(newMacStr, ApprovalParams{
+		NodeID:         7,
+		Name:           "stage-right",
+		Zone:           "stage",
+		AdapterTypeStr: "led",
+	}); err != nil {
+		t.Fatalf("ApproveEnrollment: %v", err)
+	}
+
+	newNode, ok := ms.nodeRegistry.GetNodeByID(7)
+	if !ok {
+		t.Fatal("GetNodeByID(7) must return new node")
+	}
+	if newNode.Name != "stage-right" {
+		t.Errorf("Name = %q, want %q (explicit override)", newNode.Name, "stage-right")
+	}
+	if newNode.Zone != "stage" {
+		t.Errorf("Zone = %q, want %q (explicit override)", newNode.Zone, "stage")
 	}
 }

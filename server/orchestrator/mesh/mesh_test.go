@@ -353,6 +353,110 @@ func TestGetOnlineNodes_ThresholdBoundary(t *testing.T) {
 	}
 }
 
+func TestGetNodesByZone_ExcludesReplacedNodes(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac1 := []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x01}
+	mac2 := []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x02}
+	nr.AssignNode(mac1, 1, "sensor-a", "lobby")
+	nr.AssignNode(mac2, 2, "sensor-b", "lobby")
+	nr.MarkReplaced(mac1, macToString(mac2))
+
+	nodes := nr.GetNodesByZone("lobby")
+	if len(nodes) != 1 {
+		t.Errorf("GetNodesByZone: got %d nodes, want 1 (replaced node must be excluded)", len(nodes))
+	}
+	if len(nodes) == 1 && nodes[0].MACString != macToString(mac2) {
+		t.Errorf("GetNodesByZone: got node %s, want %s", nodes[0].MACString, macToString(mac2))
+	}
+}
+
+func TestGetOnlineNodes_ExcludesReplacedNodes(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x01}
+
+	// Get baseline count before adding the node
+	baseline := len(nr.GetOnlineNodes(60 * time.Second))
+
+	nr.UpdateNode(mac, AdapterTypePIR, 500, 1)
+	afterUpdate := len(nr.GetOnlineNodes(60 * time.Second))
+	if afterUpdate != baseline+1 {
+		t.Errorf("GetOnlineNodes after UpdateNode: got %d, want %d", afterUpdate, baseline+1)
+	}
+
+	nr.MarkReplaced(mac, "aa:bb:cc:dd:ee:ff")
+	afterReplace := len(nr.GetOnlineNodes(60 * time.Second))
+	if afterReplace != baseline {
+		t.Errorf("GetOnlineNodes after MarkReplaced: got %d, want %d (replaced node must be excluded)", afterReplace, baseline)
+	}
+}
+
+func TestMarkReplaced_SetsStatusAndClearsNodeID(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	nr.AssignNode(mac, 7, "entrance-left", "lobby")
+
+	nr.MarkReplaced(mac, "11:22:33:44:55:66")
+
+	node, ok := nr.GetNode(mac)
+	if !ok {
+		t.Fatal("node must still exist in registry after MarkReplaced")
+	}
+	if node.Status != "replaced" {
+		t.Errorf("Status = %q, want %q", node.Status, "replaced")
+	}
+	if node.ReplacedBy != "11:22:33:44:55:66" {
+		t.Errorf("ReplacedBy = %q, want %q", node.ReplacedBy, "11:22:33:44:55:66")
+	}
+	if node.NodeID != 0 {
+		t.Errorf("NodeID = %d, want 0 after replacement", node.NodeID)
+	}
+}
+
+func TestMarkReplaced_ReplacedNodeNotReturnedByGetNodeByID(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	nr.AssignNode(mac, 7, "entrance-left", "lobby")
+
+	nr.MarkReplaced(mac, "11:22:33:44:55:66")
+
+	_, ok := nr.GetNodeByID(7)
+	if ok {
+		t.Error("GetNodeByID(7) must not return a replaced node")
+	}
+
+	if _, ok := nr.GetNodeByID(0); ok {
+		t.Error("GetNodeByID(0) must not return a replaced node")
+	}
+}
+
+func TestMarkReplaced_PersistsAndLoadsCorrectly(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	nr.AssignNode(mac, 7, "entrance-left", "lobby")
+	nr.MarkReplaced(mac, "11:22:33:44:55:66")
+
+	path := t.TempDir() + "/nodes.json"
+	if err := nr.Persist(path); err != nil {
+		t.Fatalf("Persist: %v", err)
+	}
+
+	nr2 := NewNodeRegistry()
+	if err := nr2.Load(path); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	node, ok := nr2.GetNode(mac)
+	if !ok {
+		t.Fatal("replaced node must survive Persist/Load round-trip")
+	}
+	if node.Status != "replaced" {
+		t.Errorf("Status after load = %q, want %q", node.Status, "replaced")
+	}
+	if node.ReplacedBy != "11:22:33:44:55:66" {
+		t.Errorf("ReplacedBy after load = %q, want %q", node.ReplacedBy, "11:22:33:44:55:66")
+	}
+}
+
 func TestSerialComm(t *testing.T) {
 	mockPort := NewMockSerialPort()
 	comm := NewSerialComm(mockPort)

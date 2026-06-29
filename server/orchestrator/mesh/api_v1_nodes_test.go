@@ -113,3 +113,53 @@ func TestV1Nodes_Command_UnsupportedAction_Returns501(t *testing.T) {
 		t.Errorf("got %d, want 501", w.Code)
 	}
 }
+
+func TestV1Nodes_Hotswap_OldNodeExcludedNewNodePresent(t *testing.T) {
+	api, ms := newV1TestServer(t)
+
+	// Old node enrolled and assigned
+	oldMAC := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	ms.nodeRegistry.AssignNode(oldMAC, 7, "entrance-left", "lobby")
+	ms.nodeRegistry.UpdateNode(oldMAC, AdapterTypePIR, 3600, 1)
+
+	// New node sends enrollment
+	newMAC := [6]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	var newPubKey [32]byte
+	for i := range newPubKey {
+		newPubKey[i] = byte(i + 1)
+	}
+	if err := ms.authRegistry.AddPending(newMAC, newPubKey); err != nil {
+		t.Fatalf("AddPending: %v", err)
+	}
+
+	// Approve hotswap via API
+	w := v1Request(t, api, "POST", "/api/v1/enrollments/112233445566/approve",
+		map[string]interface{}{"nodeId": 7})
+	if w.Code != http.StatusOK {
+		t.Fatalf("approve returned %d, want 200", w.Code)
+	}
+
+	// GET /api/v1/nodes — must return exactly one node with id=7
+	w = v1Request(t, api, "GET", "/api/v1/nodes", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/nodes returned %d", w.Code)
+	}
+	var resp APIResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	data, _ := json.Marshal(resp.Data)
+	var nodes []NodeV1
+	if err := json.Unmarshal(data, &nodes); err != nil {
+		t.Fatalf("unmarshal nodes: %v", err)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("got %d nodes, want 1 (replaced node must be excluded)", len(nodes))
+	}
+	if nodes[0].ID != 7 {
+		t.Errorf("node ID = %d, want 7", nodes[0].ID)
+	}
+	if nodes[0].Name != "entrance-left" {
+		t.Errorf("Name = %q, want %q (inherited)", nodes[0].Name, "entrance-left")
+	}
+}
