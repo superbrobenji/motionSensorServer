@@ -348,10 +348,22 @@ func (api *APIServer) getAllEnrollments(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// ApprovalRequest is the optional JSON body for the approve-enrollment endpoint.
+type ApprovalRequest struct {
+	NodeID uint8  `json:"nodeId"`
+	Name   string `json:"name"`
+	Zone   string `json:"zone"`
+}
+
 // approveEnrollment approves a pending node enrollment
 func (api *APIServer) approveEnrollment(w http.ResponseWriter, r *http.Request) {
 	mac := mux.Vars(r)["mac"]
-	if err := api.meshServer.ApproveEnrollment(mac); err != nil {
+	var req ApprovalRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req) // body is optional; ignore decode errors
+	}
+	params := ApprovalParams{NodeID: req.NodeID, Name: req.Name, Zone: req.Zone}
+	if err := api.meshServer.ApproveEnrollment(mac, params); err != nil {
 		api.writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

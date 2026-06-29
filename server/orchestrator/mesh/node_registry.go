@@ -20,6 +20,9 @@ type NodeInfo struct {
 	Uptime      uint32    `json:"uptime"`
 	LastSeen    time.Time `json:"lastSeen"`
 	HopCount    uint32    `json:"hopCount"`
+	NodeID      uint8     `json:"nodeId,omitempty"`
+	Name        string    `json:"name,omitempty"`
+	Zone        string    `json:"zone,omitempty"`
 }
 
 // NodeRegistry manages the state of all known mesh nodes
@@ -56,6 +59,45 @@ func (nr *NodeRegistry) UpdateNode(mac []byte, adapterType int32, uptime uint32,
 	node.Uptime = uptime
 	node.LastSeen = time.Now()
 	node.HopCount = hopCount
+	// NodeID, Name, Zone are sticky — only AssignNode may set them
+}
+
+// AssignNode sets or creates a node entry with the given identity fields.
+func (nr *NodeRegistry) AssignNode(mac []byte, nodeId uint8, name, zone string) {
+	nr.mu.Lock()
+	defer nr.mu.Unlock()
+	macStr := macToString(mac)
+	node, exists := nr.nodes[macStr]
+	if !exists {
+		node = &NodeInfo{
+			MAC:       make([]byte, len(mac)),
+			MACString: macStr,
+		}
+		copy(node.MAC, mac)
+		nr.nodes[macStr] = node
+	}
+	node.NodeID = nodeId
+	node.Name = name
+	node.Zone = zone
+}
+
+// NextFreeNodeID returns the lowest unused node ID in the range 1–255.
+// Returns 0 if all 255 IDs are in use.
+func (nr *NodeRegistry) NextFreeNodeID() uint8 {
+	nr.mu.RLock()
+	defer nr.mu.RUnlock()
+	used := make(map[uint8]bool)
+	for _, n := range nr.nodes {
+		if n.NodeID > 0 {
+			used[n.NodeID] = true
+		}
+	}
+	for id := uint8(1); id <= 255; id++ {
+		if !used[id] {
+			return id
+		}
+	}
+	return 0 // all 255 IDs in use
 }
 
 // GetNode returns information about a specific node
@@ -141,6 +183,9 @@ type persistedNode struct {
 	Uptime      uint32    `json:"uptime"`
 	LastSeen    time.Time `json:"lastSeen"`
 	HopCount    uint32    `json:"hopCount"`
+	NodeID      uint8     `json:"nodeId,omitempty"`
+	Name        string    `json:"name,omitempty"`
+	Zone        string    `json:"zone,omitempty"`
 }
 
 // Persist saves the registry to a JSON file at path.
@@ -154,6 +199,9 @@ func (nr *NodeRegistry) Persist(path string) error {
 			Uptime:      n.Uptime,
 			LastSeen:    n.LastSeen,
 			HopCount:    n.HopCount,
+			NodeID:      n.NodeID,
+			Name:        n.Name,
+			Zone:        n.Zone,
 		})
 	}
 	nr.mu.RUnlock()
@@ -198,6 +246,9 @@ func (nr *NodeRegistry) Load(path string) error {
 			Uptime:      e.Uptime,
 			LastSeen:    e.LastSeen,
 			HopCount:    e.HopCount,
+			NodeID:      e.NodeID,
+			Name:        e.Name,
+			Zone:        e.Zone,
 		}
 	}
 	slog.Info("Node registry loaded", "count", len(entries), "path", path)

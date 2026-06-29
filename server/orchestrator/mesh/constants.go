@@ -24,6 +24,7 @@ const (
 	OpHealthReq    byte = 0xB0 // Request health reports
 	OpHealthReport byte = 0xB1 // Node → server health status
 	OpNodeHealth   byte = 0xB2 // PIR (non-serial) node → server health status; transport: AdapterTypeSerial
+	OpNodeIdSet    byte = 0xC0 // Server → node: assign logical ID; data: [C0][6B targetMAC][1B nodeId]
 )
 
 // Enrollment Message Type Constants

@@ -10,6 +10,7 @@ import (
 type MockSerialPort struct {
 	readBuffer  *bytes.Buffer
 	writeBuffer *bytes.Buffer
+	writeOffset int // tracks how many bytes have been consumed by decodeWrittenFrame
 }
 
 func NewMockSerialPort() *MockSerialPort {
@@ -37,6 +38,15 @@ func (m *MockSerialPort) AddReadData(data []byte) {
 
 func (m *MockSerialPort) GetWrittenData() []byte {
 	return m.writeBuffer.Bytes()
+}
+
+// GetWrittenDataFrom returns all written bytes starting at offset.
+func (m *MockSerialPort) GetWrittenDataFrom(offset int) []byte {
+	all := m.writeBuffer.Bytes()
+	if offset >= len(all) {
+		return nil
+	}
+	return all[offset:]
 }
 
 func TestMessageBuilder(t *testing.T) {
@@ -219,6 +229,58 @@ func TestNodeRegistry(t *testing.T) {
 		count := registry.NodeCount()
 		if count != 2 {
 			t.Errorf("Expected count 2, got %d", count)
+		}
+	})
+
+	t.Run("AssignNode_SetsIdentityFields", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+		registry.AssignNode(mac, 7, "entrance-left", "lobby")
+		node, ok := registry.GetNode(mac)
+		if !ok {
+			t.Fatal("node not found after AssignNode")
+		}
+		if node.NodeID != 7 {
+			t.Errorf("NodeID: got %d, want 7", node.NodeID)
+		}
+		if node.Name != "entrance-left" {
+			t.Errorf("Name: got %q", node.Name)
+		}
+		if node.Zone != "lobby" {
+			t.Errorf("Zone: got %q", node.Zone)
+		}
+	})
+
+	t.Run("UpdateNode_DoesNotOverwriteAssignedFields", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		mac := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+		registry.AssignNode(mac, 3, "stage-left", "main")
+		registry.UpdateNode(mac, AdapterTypePIR, 1000, 2)
+		node, ok := registry.GetNode(mac)
+		if !ok {
+			t.Fatal("node not found")
+		}
+		if node.NodeID != 3 {
+			t.Errorf("NodeID overwritten: got %d, want 3", node.NodeID)
+		}
+		if node.Name != "stage-left" {
+			t.Errorf("Name overwritten: got %q", node.Name)
+		}
+	})
+
+	t.Run("NextFreeNodeID_ReturnsOne_WhenEmpty", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		if id := registry.NextFreeNodeID(); id != 1 {
+			t.Errorf("NextFreeNodeID: got %d, want 1", id)
+		}
+	})
+
+	t.Run("NextFreeNodeID_SkipsUsedIds", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		registry.AssignNode([]byte{0x01, 0, 0, 0, 0, 0}, 1, "", "")
+		registry.AssignNode([]byte{0x02, 0, 0, 0, 0, 0}, 2, "", "")
+		if id := registry.NextFreeNodeID(); id != 3 {
+			t.Errorf("NextFreeNodeID: got %d, want 3", id)
 		}
 	})
 }

@@ -423,24 +423,64 @@ func (ms *MeshServer) handleMasterBeacon(msg *MeshMessage) error {
 	return nil
 }
 
+// ApprovalParams carries optional identity fields for a node being approved.
+// NodeID 0 means auto-assign the lowest free ID.
+type ApprovalParams struct {
+	NodeID uint8
+	Name   string
+	Zone   string
+}
+
 // ApproveEnrollment approves a pending node enrollment and sends a JOIN_ACK
-// frame over serial with the node's Curve25519 public key echoed back.
-func (ms *MeshServer) ApproveEnrollment(macStr string) error {
+// frame over serial with the node's Curve25519 public key echoed back,
+// followed by an OP_NODE_ID_SET frame that assigns the node its logical ID.
+func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) error {
 	node, err := ms.authRegistry.Approve(macStr)
 	if err != nil {
 		return err
 	}
+
+	// Auto-assign nodeId if not provided
+	nodeId := params.NodeID
+	if nodeId == 0 {
+		nodeId = ms.nodeRegistry.NextFreeNodeID()
+		if nodeId == 0 {
+			slog.Warn("All node IDs in use; node will have ID 0", "mac", macStr)
+		}
+	}
+
+	// Assign in node registry (creates entry if not yet seen)
+	ms.nodeRegistry.AssignNode(node.MAC[:], nodeId, params.Name, params.Zone)
+
 	if ms.serialComm != nil {
+		// Send JOIN_ACK
 		ackMsg := &MeshMessage{
 			MessageType:      MessageTypeJoinAck,
 			TargetMacAddress: node.MAC[:],
 			PublicKey:        node.PublicKey[:],
 		}
 		if err := ms.serialComm.WriteFrame(ackMsg); err != nil {
-			slog.Warn("Failed to send JOIN_ACK approval frame", "mac", macStr, "error", err)
+			slog.Warn("Failed to send JOIN_ACK", "mac", macStr, "error", err)
+		}
+
+		// Send OP_NODE_ID_SET immediately after JOIN_ACK
+		if nodeId > 0 {
+			payload := make([]byte, MaxDataLength)
+			payload[0] = OpNodeIdSet          // 0xC0
+			copy(payload[1:7], node.MAC[:])   // target MAC
+			payload[7] = nodeId
+			idMsg := &MeshMessage{
+				MessageType: MessageTypeSerialCmdBroadcast,
+				DataType:    AdapterTypeSerial,
+				Data:        payload,
+			}
+			if err := ms.serialComm.WriteFrame(idMsg); err != nil {
+				slog.Warn("Failed to send OP_NODE_ID_SET", "mac", macStr, "nodeId", nodeId, "error", err)
+			}
 		}
 	}
-	slog.Info("Enrollment approved", "mac", macStr)
+
+	slog.Info("Enrollment approved", "mac", macStr, "nodeId", nodeId, "name", params.Name)
 	if ms.authPath != "" {
 		return ms.authRegistry.Persist(ms.authPath)
 	}
