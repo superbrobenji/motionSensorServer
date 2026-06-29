@@ -30,7 +30,14 @@ var txPowerPresetNames = map[uint8]string{
 
 // MeshServer manages the mesh network communication
 type MeshServer struct {
-	serialComm     *SerialComm
+	serialComm          *SerialComm
+	secondaryPort        string
+	secondarySerialComm  *SerialComm
+	secondaryConnected   bool
+
+	frameTimeMu        sync.Mutex // protects primaryLastFrameAt
+	primaryLastFrameAt time.Time
+
 	nodeRegistry   *NodeRegistry
 	messageBuilder *MessageBuilder
 	eventStore     EventStore.EventStoreInterface
@@ -71,8 +78,9 @@ type MeshServer struct {
 
 // MeshServerConfig holds configuration for the mesh server
 type MeshServerConfig struct {
-	SerialPort       string
-	BaudRate         int
+	SerialPort          string
+	SerialPortSecondary string // empty = single-master mode
+	BaudRate            int
 	HealthTimeout    time.Duration
 	EventStore       EventStore.EventStoreInterface
 	AuthRegistryPath string // e.g. "data/nodeauth.json"
@@ -108,6 +116,7 @@ func NewMeshServer(config MeshServerConfig) *MeshServer {
 		nodeRegistryPath: config.NodeRegistryPath,
 		stopNodePersist:  make(chan struct{}),
 		serialPort:       config.SerialPort,
+		secondaryPort:    config.SerialPortSecondary,
 		baudRate:         config.BaudRate,
 		healthTimeout:    config.HealthTimeout,
 		eventBroker:      NewEventBroker(),
@@ -143,10 +152,27 @@ func (ms *MeshServer) Start() error {
 	ms.serialComm = NewSerialComm(port)
 	ms.running = true
 	SetSerialConnected(true)
+	ms.frameTimeMu.Lock()
+	ms.primaryLastFrameAt = time.Now()
+	ms.frameTimeMu.Unlock()
 
 	// Start message processing goroutine
 	ms.wg.Add(1)
-	go ms.messageProcessor()
+	go ms.messageProcessor(ms.serialComm, "primary")
+
+	if ms.secondaryPort != "" {
+		secondaryPhysPort, secErr := serial.Open(ms.secondaryPort, mode)
+		if secErr != nil {
+			slog.Warn("Failed to open secondary serial port — continuing single-master",
+				"port", ms.secondaryPort, "error", secErr)
+		} else {
+			ms.secondarySerialComm = NewSerialComm(secondaryPhysPort)
+			ms.secondaryConnected = true
+			ms.wg.Add(1)
+			go ms.messageProcessor(ms.secondarySerialComm, "secondary")
+			slog.Info("Secondary serial port opened", "port", ms.secondaryPort)
+		}
+	}
 
 	// Start auth registry persistence loop
 	if ms.authPath != "" {
@@ -204,13 +230,38 @@ func (ms *MeshServer) Stop() error {
 		SetSerialConnected(false)
 	}
 
+	if ms.secondarySerialComm != nil {
+		ms.secondarySerialComm.Close()
+		ms.secondaryConnected = false
+	}
+
 	ms.wg.Wait()
 	slog.Info("Mesh server stopped")
 	return nil
 }
 
+// activeOutboundComm returns the SerialComm to use for outgoing frames.
+// When a secondary port is configured, switches to secondary if primary has
+// been silent for more than 75 seconds.
+func (ms *MeshServer) activeOutboundComm() *SerialComm {
+	ms.mu.RLock()
+	secondary := ms.secondarySerialComm
+	ms.mu.RUnlock()
+	if secondary == nil {
+		return ms.serialComm
+	}
+	ms.frameTimeMu.Lock()
+	primaryAge := time.Since(ms.primaryLastFrameAt)
+	ms.frameTimeMu.Unlock()
+	const failoverThreshold = 75 * time.Second
+	if primaryAge > failoverThreshold {
+		return secondary
+	}
+	return ms.serialComm
+}
+
 // messageProcessor processes incoming messages from the serial port
-func (ms *MeshServer) messageProcessor() {
+func (ms *MeshServer) messageProcessor(comm *SerialComm, label string) {
 	defer ms.wg.Done()
 
 	consecutiveErrors := 0
@@ -221,20 +272,22 @@ func (ms *MeshServer) messageProcessor() {
 		case <-ms.ctx.Done():
 			return
 		default:
-			msg, err := ms.serialComm.ReadFrame()
+			msg, err := comm.ReadFrame()
 			if err != nil {
 				consecutiveErrors++
 				if consecutiveErrors <= maxConsecutiveErrors {
 					slog.Warn("Serial frame read error", "count", consecutiveErrors, "error", err)
 				} else if consecutiveErrors == maxConsecutiveErrors+1 {
 					slog.Error("Serial read suppressed — too many consecutive errors", "count", consecutiveErrors)
-					SetSerialConnected(false)
+					if label == "primary" {
+						SetSerialConnected(false)
+					}
 				}
 
 				// After many consecutive errors, try to flush the buffer
 				if consecutiveErrors == 10 {
 					slog.Warn("Attempting buffer flush after consecutive errors", "count", consecutiveErrors)
-					if flushErr := ms.serialComm.FlushBuffer(); flushErr != nil {
+					if flushErr := comm.FlushBuffer(); flushErr != nil {
 						slog.Warn("Buffer flush failed", "error", flushErr)
 					}
 				}
@@ -254,6 +307,13 @@ func (ms *MeshServer) messageProcessor() {
 					slog.Info("Frame reading recovered", "consecutiveErrors", consecutiveErrors)
 				}
 				consecutiveErrors = 0
+			}
+
+			// Record primary frame time for failover logic
+			if label == "primary" {
+				ms.frameTimeMu.Lock()
+				ms.primaryLastFrameAt = time.Now()
+				ms.frameTimeMu.Unlock()
 			}
 
 			slog.Debug("Message received", "type", msg.MessageType, "dataType", msg.DataType, "origin", macToString(msg.OriginMacAddress))
@@ -528,7 +588,7 @@ func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) er
 			TargetMacAddress: node.MAC[:],
 			PublicKey:        node.PublicKey[:],
 		}
-		if err := ms.serialComm.WriteFrame(ackMsg); err != nil {
+		if err := ms.activeOutboundComm().WriteFrame(ackMsg); err != nil {
 			slog.Warn("Failed to send JOIN_ACK", "mac", macStr, "error", err)
 		}
 
@@ -543,7 +603,7 @@ func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) er
 				DataType:    AdapterTypeSerial,
 				Data:        payload,
 			}
-			if err := ms.serialComm.WriteFrame(idMsg); err != nil {
+			if err := ms.activeOutboundComm().WriteFrame(idMsg); err != nil {
 				slog.Warn("Failed to send OP_NODE_ID_SET", "mac", macStr, "nodeId", nodeId, "error", err)
 			}
 		}
@@ -586,7 +646,7 @@ func (ms *MeshServer) RejectEnrollment(macStr string) error {
 			TargetMacAddress: mac[:],
 			// PublicKey intentionally absent — rejection signal
 		}
-		if err := ms.serialComm.WriteFrame(rejectMsg); err != nil {
+		if err := ms.activeOutboundComm().WriteFrame(rejectMsg); err != nil {
 			slog.Warn("Failed to send rejection frame", "mac", macStr, "error", err)
 			// best-effort; do not block the rejection
 		}
@@ -625,7 +685,7 @@ func (ms *MeshServer) SendMessage(msg *MeshMessage) error {
 		slog.Warn("Failed to log outgoing message to Kafka", "error", err)
 	}
 
-	if err := ms.serialComm.WriteFrame(msg); err != nil {
+	if err := ms.activeOutboundComm().WriteFrame(msg); err != nil {
 		slog.Error("Failed to send message", "error", err)
 		return err
 	}
@@ -720,7 +780,7 @@ func (ms *MeshServer) SendNodeData(mac []byte, dataType int32, data []byte) erro
 		DataType:     dataType,
 		Data:         payload,
 	}
-	return ms.serialComm.WriteFrame(msg)
+	return ms.activeOutboundComm().WriteFrame(msg)
 }
 
 // publishEvent marshals data and publishes a typed Event to the broker.
@@ -818,6 +878,14 @@ func (ms *MeshServer) IsRunning() bool {
 	return ms.running
 }
 
+// SerialStatus returns the connection state of primary and secondary serial ports,
+// and whether a secondary port is configured.
+func (ms *MeshServer) SerialStatus() (primary bool, secondary bool, secondaryConfigured bool) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return ms.serialComm != nil, ms.secondaryConnected, ms.secondaryPort != "" || ms.secondarySerialComm != nil
+}
+
 // SetTxPowerPreset sends OP_TX_POWER_SET to master via serial.
 // Master applies locally and broadcasts to all enrolled nodes.
 func (ms *MeshServer) SetTxPowerPreset(preset uint8) error {
@@ -836,7 +904,7 @@ func (ms *MeshServer) SetTxPowerPreset(preset uint8) error {
 		DataType:    AdapterTypeSerial,
 		Data:        payload,
 	}
-	if err := ms.serialComm.WriteFrame(msg); err != nil {
+	if err := ms.activeOutboundComm().WriteFrame(msg); err != nil {
 		return fmt.Errorf("failed to send TX power preset: %w", err)
 	}
 

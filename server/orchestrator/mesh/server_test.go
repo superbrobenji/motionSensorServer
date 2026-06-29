@@ -266,3 +266,48 @@ func TestSendNodeData_EmbedsMacInPayload(t *testing.T) {
 		t.Errorf("Data[1:7] MAC: got %v, want %v", msg.Data[1:7], mac)
 	}
 }
+
+func TestActiveOutboundComm_ReturnsPrimary_WhenSecondaryNotConfigured(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mock := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(mock)
+
+	comm := ms.activeOutboundComm()
+	if comm != ms.serialComm {
+		t.Error("activeOutboundComm() must return primary when no secondary configured")
+	}
+}
+
+func TestActiveOutboundComm_ReturnsPrimary_WhenPrimaryIsRecent(t *testing.T) {
+	ms := newTestMeshServer(t)
+	primaryMock := NewMockSerialPort()
+	secondaryMock := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(primaryMock)
+	ms.secondarySerialComm = NewSerialComm(secondaryMock)
+	// Primary received a frame 10 seconds ago — well within the 75s threshold
+	ms.frameTimeMu.Lock()
+	ms.primaryLastFrameAt = time.Now().Add(-10 * time.Second)
+	ms.frameTimeMu.Unlock()
+
+	comm := ms.activeOutboundComm()
+	if comm != ms.serialComm {
+		t.Error("activeOutboundComm() must return primary when primary is recent")
+	}
+}
+
+func TestActiveOutboundComm_FailsOverToSecondary_AfterPrimaryTimeout(t *testing.T) {
+	ms := newTestMeshServer(t)
+	primaryMock := NewMockSerialPort()
+	secondaryMock := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(primaryMock)
+	ms.secondarySerialComm = NewSerialComm(secondaryMock)
+	// Primary last heard 76 seconds ago — over the 75s threshold
+	ms.frameTimeMu.Lock()
+	ms.primaryLastFrameAt = time.Now().Add(-76 * time.Second)
+	ms.frameTimeMu.Unlock()
+
+	comm := ms.activeOutboundComm()
+	if comm != ms.secondarySerialComm {
+		t.Error("activeOutboundComm() must return secondary after primary timeout")
+	}
+}

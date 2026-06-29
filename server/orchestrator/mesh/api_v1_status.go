@@ -18,9 +18,30 @@ func (api *APIServer) v1Status(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	primaryConnected, secondaryConnected, secondaryConfigured := api.meshServer.SerialStatus()
+
+	primaryStatus := "disconnected"
+	if primaryConnected {
+		primaryStatus = "connected"
+	}
+
+	secondaryStatus := "not_configured"
+	if secondaryConfigured {
+		if secondaryConnected {
+			secondaryStatus = "connected"
+		} else {
+			secondaryStatus = "disconnected"
+		}
+	}
+
 	api.writeJSON(w, http.StatusOK, APIResponse{
 		Success: true,
 		Data: map[string]interface{}{
+			"serial": map[string]string{
+				"primary":   primaryStatus,
+				"secondary": secondaryStatus,
+			},
 			"nodes": map[string]int{
 				"total":   total,
 				"online":  online,
