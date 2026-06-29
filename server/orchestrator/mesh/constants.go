@@ -45,7 +45,7 @@ func BroadcastMACBytes() []byte {
 const MACAddressLength = 6
 
 // Maximum data payload length
-const MaxDataLength = 12
+const MaxDataLength = 64
 
 // GetAdapterTypeName returns a human-readable name for an adapter type.
 func GetAdapterTypeName(adapterType int32) string {

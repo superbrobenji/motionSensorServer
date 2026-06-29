@@ -245,14 +245,14 @@ func (ms *MeshServer) messageProcessor() {
 // handleMessage processes a received mesh message
 func (ms *MeshServer) handleMessage(msg *MeshMessage) error {
 	// Proto version check — version 0 means legacy (pre-security) node; allow it.
-	// Any protoVersion > 0 that is not 1 is an unknown future version; drop it.
-	if msg.ProtoVersion > 0 && msg.ProtoVersion != 1 {
+	// Any protoVersion > 0 that is not 2 is an unknown future version; drop it.
+	if msg.ProtoVersion > 0 && msg.ProtoVersion != 2 {
 		slog.Warn("Unsupported proto version — dropping", "version", msg.ProtoVersion, "origin", fmt.Sprintf("%x", msg.OriginMacAddress))
 		return nil
 	}
 
-	// Replay check (only for proto v1 messages with epoch/seq set)
-	if msg.ProtoVersion == 1 && msg.EpochNum > 0 {
+	// Replay check (only for proto v2 messages with epoch/seq set)
+	if msg.ProtoVersion == 2 && msg.EpochNum > 0 {
 		if len(msg.OriginMacAddress) != 6 {
 			slog.Warn("Dropping message: invalid OriginMacAddress length", "len", len(msg.OriginMacAddress))
 			return nil

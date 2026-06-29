@@ -50,3 +50,45 @@ func TestSetTxPowerPreset_InvalidPreset_ReturnsError(t *testing.T) {
 		t.Error("expected error for preset=3, got nil")
 	}
 }
+
+func TestHandleMessage_ProtoVersionGuard(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+
+	// Build a health report payload that would register a node if processed.
+	healthData := make([]byte, 12)
+	healthData[0] = byte(OpHealthReport)
+	healthData[1] = byte(AdapterTypePIR)
+	copy(healthData[2:8], mac)
+	// bytes 8-11: uptime = 0 (zero value)
+
+	// v1 message: current guard accepts v1 — after fix it must drop v1.
+	v1msg := &MeshMessage{
+		ProtoVersion:     1,
+		MessageType:      MessageTypeAdapterData,
+		DataType:         AdapterTypeSerial,
+		Data:             healthData,
+		OriginMacAddress: mac,
+	}
+	if err := ms.handleMessage(v1msg); err != nil {
+		t.Fatalf("handleMessage(v1) returned unexpected error: %v", err)
+	}
+	if _, ok := ms.GetNodeRegistry().GetNode(mac); ok {
+		t.Error("v1 message should be dropped — node must not be registered")
+	}
+
+	// v2 message: must be accepted and processed.
+	v2msg := &MeshMessage{
+		ProtoVersion:     2,
+		MessageType:      MessageTypeAdapterData,
+		DataType:         AdapterTypeSerial,
+		Data:             healthData,
+		OriginMacAddress: mac,
+	}
+	if err := ms.handleMessage(v2msg); err != nil {
+		t.Fatalf("handleMessage(v2) returned unexpected error: %v", err)
+	}
+	if _, ok := ms.GetNodeRegistry().GetNode(mac); !ok {
+		t.Error("v2 message must be processed — node should be registered after health report")
+	}
+}
