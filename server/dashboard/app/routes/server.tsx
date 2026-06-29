@@ -12,7 +12,7 @@ interface ServerStatus {
   timestamp: number;
 }
 
-export async function loader({ request: _request }: Route.LoaderArgs) {
+export async function loader(): Promise<ServerStatus> {
   const response = (await ApiService("getStatus")) as IApiResponse<ServerStatus>;
   if (!response.success || !response.data) {
     throw new Response("Failed to get server status", { status: 500 });

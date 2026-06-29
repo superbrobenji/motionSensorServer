@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go-test:
+    name: Go test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/orchestrator/go.mod
+      - run: go test ./...
+      - run: go vet ./...
+
+  go-lint:
+    name: Go lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/orchestrator/go.mod
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64
+          working-directory: server/orchestrator
+
+  ts-build:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: server/dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+
+  ts-lint:
+    name: TypeScript lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: server/dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build images
+        working-directory: server
+        env:
+          API_KEY: ci-placeholder
+        run: docker compose build

@@ -65,8 +65,7 @@ export default async function ApiService<ApiResponse>(
 // Use this one during deving with dummy data
 
 export async function dev_ApiService<ApiResponse>(
-  service: ServiceName,
-  _options?: RequestInit
+  service: ServiceName
 ): Promise<ApiResponse> {
   const dev_endpoints = {
     // node management

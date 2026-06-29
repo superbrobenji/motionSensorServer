@@ -1,87 +1,90 @@
-# Welcome to React Router!
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-A modern, production-ready template for building full-stack React applications using React Router.
+# Planetopia Dashboard
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+React Router v7 web application for monitoring and controlling the Planetopia
+motion sensor mesh network. Communicates with the orchestrator REST API.
 
 ## Features
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
+- Node list with live status (online/offline, adapter type, uptime)
+- Enrollment management — approve or reject pending nodes
+- Server start/stop control
+- Automatic polling of the orchestrator API
 
-## Getting Started
+## Environment Variables
 
-### Installation
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_URL` | Orchestrator base URL (e.g. `http://localhost:8080`) |
+| `VITE_API_KEY` | Must match the orchestrator's `API_KEY` |
 
-Install the dependencies:
+Copy `server/env.example` to `server/.env` and set both values before starting.
+
+## Development
+
+Prerequisites: Node.js LTS, npm.
 
 ```bash
+cd server/dashboard
 npm install
-```
-
-### Development
-
-Start the development server with HMR:
-
-```bash
 npm run dev
 ```
 
-Your application will be available at `http://localhost:5173`.
+The dev server starts at `http://localhost:5173` with hot module replacement.
+Set `VITE_API_URL` and `VITE_API_KEY` in `server/.env` to connect to the
+orchestrator.
 
-## Building for Production
-
-Create a production build:
-
-```bash
-npm run build
-```
-
-## Deployment
-
-### Docker Deployment
-
-To build and run using Docker:
+### Type checking
 
 ```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
+npm run typecheck
 ```
 
-The containerized application can be deployed to any platform that supports Docker, including:
+### Linting
 
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
-
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
+```bash
+npm run lint
 ```
 
-## Styling
+## Production (Docker)
 
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+The dashboard is served as a containerised Node.js app. Run it via Docker
+Compose from `server/`:
 
----
+```bash
+docker compose up -d dashboard
+```
 
-Built with ❤️ using React Router.
+The service listens on port `3000` and connects to the orchestrator container
+on the internal `kafka-net` Docker network using the `VITE_API_URL` environment
+variable set in `server/.env`.
+
+### Manual Docker build
+
+```bash
+docker build -t planetopia-dashboard server/dashboard/
+docker run -p 3000:3000 \
+  -e VITE_API_URL=http://localhost:8080 \
+  -e VITE_API_KEY=your-key \
+  planetopia-dashboard
+```
+
+## Project Structure
+
+```
+app/
+├── components/
+│   ├── Navigation/    # Top navigation bar
+│   └── NodeCard/      # Per-node status card
+├── interfaces/        # TypeScript interfaces (IApiService, INodes)
+├── routes/            # File-based routes (nodes, enrollments, server, welcome)
+└── services/
+    ├── apiService.ts  # Orchestrator API client
+    └── formatDateTime.ts
+```
+
+## License
+
+Copyright (C) 2026 Planetopia Contributors.
+GNU General Public License v3.0 — see root [LICENSE](../../LICENSE).

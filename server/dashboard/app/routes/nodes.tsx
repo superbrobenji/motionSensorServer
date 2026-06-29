@@ -4,7 +4,7 @@ import type { Route } from "../+types/root";
 import type { INode, INodes } from "~/interfaces/INodes";
 import NodeCard from "~/components/NodeCard/nodeCard";
 
-export async function loader({}: Route.LoaderArgs) {
+export async function loader(): Promise<INodes> {
   const response = (await ApiService("getNodes")) as IApiResponse;
 
   if (!response.success) {

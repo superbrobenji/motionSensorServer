@@ -1,151 +1,162 @@
-# Planetopia Mesh Server
+# Planetopia Orchestrator
 
-A Go-based server that communicates with ESP32 mesh networks over USB serial, implementing the Planetopia protocol for motion sensor management.
+Go service that communicates with an ESP32 mesh network over USB serial,
+implementing the Planetopia protocol for motion sensor management.
+
+SPDX-License-Identifier: GPL-3.0-or-later
 
 ## Features
 
-- **Serial Communication**: USB serial interface with ESP32 master node using protobuf framing
-- **Mesh Network Management**: Control and monitor ESP-NOW mesh nodes
-- **Node Configuration**: Set adapter types (PIR, LED, etc.) on individual or all nodes
-- **Health Monitoring**: Track node status, uptime, and connectivity
-- **Kafka Integration**: Log events and messages for monitoring and analytics
-- **HTTP API**: RESTful API for remote control and status monitoring
-- **Docker Support**: Containerized deployment with Docker Compose
+- USB serial interface to ESP32 master node (protobuf framing, 115200 baud)
+- ESP-NOW mesh node management — configure, monitor, and broadcast
+- Node health monitoring with configurable online/offline timeout
+- Kafka event logging (`motion-trigger`, `mesh-messages` topics)
+- Prometheus metrics endpoint
+- RESTful HTTP API
+- Node authentication with replay-protection persistence
 
 ## Architecture
 
 ```
 ┌─────────────────┐    USB Serial    ┌─────────────────┐    ESP-NOW Mesh    ┌─────────────────┐
-│   Mesh Server   │ ◄─────────────► │  ESP32 Master   │ ◄─────────────────► │   Mesh Nodes    │
+│   Orchestrator  │ ◄──────────────► │  ESP32 Master   │ ◄─────────────────► │   Mesh Nodes    │
 │                 │    115200 baud   │                 │                     │   (PIR, LED)    │
 └─────────────────┘                  └─────────────────┘                     └─────────────────┘
          │
          ▼
 ┌─────────────────┐
 │   Kafka Store   │
-│   (Events &     │
-│    Messages)    │
+│  motion-trigger │
+│  mesh-messages  │
 └─────────────────┘
 ```
-
-## Protocol
-
-The server implements the Planetopia mesh protocol:
-
-- **Transport**: Serial 115200 8N1 with 2-byte little-endian length framing
-- **Encoding**: Protocol Buffers for message serialization
-- **Message Types**: Adapter data, master beacons, broadcast commands
-- **Control Opcodes**: Node configuration, health requests/reports
-
-### Message Types
-
-| Type | Value | Description |
-|------|-------|-------------|
-| ADAPTER_DATA | 0 | Normal sensor data from nodes |
-| MASTER_BEACON | 1 | Heartbeat from master node |
-| SERIAL_CMD_BROADCAST | 3 | Server broadcast commands |
-
-### Adapter Types
-
-| Type | Value | Description |
-|------|-------|-------------|
-| UNKNOWN | -1 | Unknown/unset adapter |
-| PIR | 0 | Motion sensor |
-| WIFI | 1 | WiFi adapter (reserved) |
-| LED | 2 | LED controller (reserved) |
-| SERIAL | 3 | Serial control messages |
 
 ## Configuration
 
 ### Environment Variables
 
-- `SERIAL_PORT`: Serial port path (default: `/dev/ttyUSB0`)
-- `BAUD_RATE`: Serial baud rate (default: `115200`)
-- `API_PORT`: HTTP API port (default: `8080`)
-- `KAFKA_BROKER`: Kafka broker address (default: `kafka:9094`)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERIAL_PORT` | `/dev/ttyUSB0` | Serial port path |
+| `BAUD_RATE` | `115200` | Serial baud rate |
+| `API_PORT` | `8080` | HTTP API port |
+| `KAFKA_BROKER` | `kafka:9092` | Kafka broker address |
+| `KAFKA_GROUP_ID` | `1` | Kafka consumer group ID |
+| `NODE_REGISTRY_PATH` | `data/nodeauth.json` | Node registry persistence file |
+| `API_KEY` | *(required)* | API authentication key — generate with `openssl rand -hex 32` |
+| `ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated CORS origins |
 
 ### Command Line Flags
 
 ```bash
-./main -serial=/dev/ttyUSB0 -baud=115200 -port=8080
+./mesh-server -serial=/dev/ttyUSB0 -baud=115200 -port=8080
 ```
 
 ## HTTP API
 
 ### Node Management
 
-- `GET /nodes` - List all known nodes
-- `GET /nodes/{mac}` - Get specific node information
-- `POST /nodes/{mac}/configure` - Configure node adapter type
-- `POST /nodes/configure-all` - Configure all nodes
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/nodes` | List all known nodes |
+| `GET` | `/nodes/{mac}` | Get specific node |
+| `POST` | `/nodes/{mac}/configure` | Configure node adapter type |
+| `POST` | `/nodes/configure-all` | Configure all nodes |
 
 ### Health & Monitoring
 
-- `POST /health/request` - Request health reports from all nodes
-- `GET /status` - Get server status and statistics
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/health/request` | Request health reports from all nodes |
+| `GET` | `/status` | Server status and statistics |
+| `GET` | `/metrics` | Prometheus metrics |
 
-### Data Broadcasting
+### Data & Control
 
-- `POST /broadcast` - Broadcast data to all nodes
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/broadcast` | Broadcast data to all nodes |
+| `POST` | `/server/start` | Start mesh communication |
+| `POST` | `/server/stop` | Stop mesh communication |
 
-### Server Control
+### Authentication
 
-- `POST /server/start` - Start mesh communication
-- `POST /server/stop` - Stop mesh communication
+All endpoints require an `Authorization: Bearer` header matching the `API_KEY`
+environment variable. Leave `API_KEY` empty only for local development without
+Docker.
 
-### API Examples
+### Example requests
 
-#### Configure a node as PIR sensor:
 ```bash
-curl -X POST http://localhost:8080/nodes/aa:bb:cc:dd:ee:ff/configure \
-  -H "Content-Type: application/json" \
-  -d '{"adapterType": 0}'
+# Server status
+curl -H "Authorization: Bearer $API_KEY" http://localhost:8080/status
+
+# List nodes
+curl -H "Authorization: Bearer $API_KEY" http://localhost:8080/nodes
+
+# Configure a node as PIR sensor (adapterType 0)
+curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"adapterType": 0}' \
+  http://localhost:8080/nodes/aa:bb:cc:dd:ee:ff/configure
+
+# Request health reports
+curl -X POST -H "Authorization: Bearer $API_KEY" http://localhost:8080/health/request
 ```
 
-#### Request health reports:
-```bash
-curl -X POST http://localhost:8080/health/request
+## Protocol
+
+### Transport
+
+Serial 115200 8N1 with 2-byte little-endian length framing:
+
+```
+[2 bytes: length (little-endian)] [N bytes: protobuf message]
 ```
 
-#### Get all nodes:
-```bash
-curl http://localhost:8080/nodes
-```
+### Message Types
 
-#### Get server status:
-```bash
-curl http://localhost:8080/status
-```
+| Type | Value | Description |
+|------|-------|-------------|
+| `ADAPTER_DATA` | 0 | Sensor data from mesh nodes |
+| `MASTER_BEACON` | 1 | Heartbeat from master node |
+| `SERIAL_CMD_BROADCAST` | 3 | Server broadcast commands |
+
+### Adapter Types
+
+| Type | Value | Description |
+|------|-------|-------------|
+| `UNKNOWN` | -1 | Unknown/unset |
+| `PIR` | 0 | Motion sensor |
+| `WIFI` | 1 | WiFi adapter (reserved) |
+| `LED` | 2 | LED controller (reserved) |
+| `SERIAL` | 3 | Serial control messages |
+
+### Control Opcodes
+
+| Opcode | Hex | Format |
+|--------|-----|--------|
+| `OP_CONFIG_SET` | `0xA0` | `[0xA0][6-byte MAC][adapter type][4 reserved bytes]` |
+| `OP_HEALTH_REQ` | `0xB0` | `[0xB0]` |
+| `OP_HEALTH_REPORT` | `0xB1` | `[0xB1][adapter type][6-byte MAC][4-byte uptime LE]` |
+
+## Kafka Topics
+
+| Topic | Events |
+|-------|--------|
+| `motion-trigger` | PIR motion detection events (JSON) |
+| `mesh-messages` | All mesh protocol messages for debugging (JSON) |
 
 ## Docker Deployment
 
-### Using Docker Compose (Recommended)
-
 ```bash
-# Start all services
-docker-compose up -d
+# Start all services (from server/)
+docker compose up -d
 
-# View logs
-docker-compose logs -f orchestrator
+# View orchestrator logs
+docker compose logs -f orchestrator
 
-# Stop services
-docker-compose down
-```
-
-### Manual Docker Build
-
-```bash
-# Build image
-docker build -t planetopia-mesh-server .
-
-# Run container
-docker run -d \
-  --name mesh-server \
-  --device /dev/ttyUSB0:/dev/ttyUSB0 \
-  --privileged \
-  -p 8080:8080 \
-  -e SERIAL_PORT=/dev/ttyUSB0 \
-  planetopia-mesh-server
+# Stop
+docker compose down
 ```
 
 ## Development
@@ -153,74 +164,47 @@ docker run -d \
 ### Prerequisites
 
 - Go 1.23+
-- USB serial device (ESP32 master node)
-- Kafka (for event logging)
+- Docker (for Kafka dependency)
 
-### Build
+### Build and test
 
 ```bash
+cd server/orchestrator
 go mod tidy
+go test ./...
+go vet ./...
 go build -o mesh-server .
 ```
 
-### Run
+### Serial port permissions (Linux)
 
 ```bash
-./mesh-server -serial=/dev/ttyUSB0
+sudo usermod -a -G dialout $USER
+# Log out and back in, then:
+docker compose up -d
 ```
-
-## Kafka Topics
-
-The server publishes to these Kafka topics:
-
-- `motion-trigger`: PIR motion detection events
-- `mesh-messages`: All mesh protocol messages (debugging)
 
 ## Troubleshooting
 
-### Serial Port Issues
-
-- Ensure the serial device exists: `ls -la /dev/ttyUSB*`
-- Check permissions: `sudo chmod 666 /dev/ttyUSB0`
-- Verify ESP32 connection and baud rate
-
-### Docker Serial Access
-
-- Use `--privileged` flag or add user to `dialout` group
-- Map the correct device: `--device /dev/ttyUSB0:/dev/ttyUSB0`
-
-### Kafka Connection Issues
-
-- Verify Kafka is running: `docker-compose ps kafka`
-- Check network connectivity: `docker-compose exec orchestrator ping kafka`
-- Review Kafka logs: `docker-compose logs kafka`
-
-## Protocol Details
-
-### Frame Format
-
-```
-[2 bytes: length (little-endian)] [N bytes: protobuf message]
+**Serial port not found:**
+```bash
+ls /dev/ttyUSB* /dev/ttyACM*
+sudo chmod 666 /dev/ttyUSB0
 ```
 
-### Health Report Format
-
-```
-Byte 0: 0xB1 (OP_HEALTH_REPORT)
-Byte 1: adapter type (int8)
-Bytes 2-7: MAC address (6 bytes)
-Bytes 8-11: uptime seconds (uint32 LE)
+**Kafka connection refused:**
+```bash
+docker compose ps kafka
+docker compose logs kafka
 ```
 
-### Config Set Format
-
-```
-Byte 0: 0xA0 (OP_CONFIG_SET)
-Bytes 1-6: target MAC address
-Byte 7: adapter type (int8)
-Bytes 8-11: reserved (0x00)
-```
+**API returns 401:**
+Check that `API_KEY` in `server/.env` matches the header value you are sending.
 
 ## License
 
-This project is part of the Planetopia motion sensor system.
+Copyright (C) 2026 Planetopia Contributors.
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See the root [LICENSE](../../LICENSE) file for the full text.
