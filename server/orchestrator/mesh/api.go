@@ -116,7 +116,9 @@ type BroadcastRequest struct {
 func (api *APIServer) writeJSON(w http.ResponseWriter, status int, response APIResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("failed to encode JSON response", "err", err)
+	}
 }
 
 // writeError writes an error response
