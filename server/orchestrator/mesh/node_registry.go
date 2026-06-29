@@ -136,6 +136,33 @@ func (nr *NodeRegistry) GetAllNodes() []*NodeInfo {
 	return nodes
 }
 
+// GetNodeByID returns the node assigned the given logical ID, or false.
+func (nr *NodeRegistry) GetNodeByID(nodeId uint8) (*NodeInfo, bool) {
+	nr.mu.RLock()
+	defer nr.mu.RUnlock()
+	for _, n := range nr.nodes {
+		if n.NodeID == nodeId {
+			copy := *n
+			return &copy, true
+		}
+	}
+	return nil, false
+}
+
+// GetNodesByZone returns all nodes assigned to the named zone.
+func (nr *NodeRegistry) GetNodesByZone(zone string) []*NodeInfo {
+	nr.mu.RLock()
+	defer nr.mu.RUnlock()
+	var result []*NodeInfo
+	for _, n := range nr.nodes {
+		if n.Zone == zone {
+			copy := *n
+			result = append(result, &copy)
+		}
+	}
+	return result
+}
+
 // GetOnlineNodes returns nodes that have been seen recently (within timeout)
 func (nr *NodeRegistry) GetOnlineNodes(timeout time.Duration) []*NodeInfo {
 	nr.mu.RLock()

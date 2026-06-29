@@ -52,6 +52,10 @@ type MeshServer struct {
 	// TX power
 	currentTxPreset uint8
 
+	// EventBroker and online state tracking
+	eventBroker     *EventBroker
+	nodeOnlineState map[string]bool // keyed by MACString; true = was online last check
+
 	// Runtime state
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -101,6 +105,8 @@ func NewMeshServer(config MeshServerConfig) *MeshServer {
 		serialPort:       config.SerialPort,
 		baudRate:         config.BaudRate,
 		healthTimeout:    config.HealthTimeout,
+		eventBroker:      NewEventBroker(),
+		nodeOnlineState:  make(map[string]bool),
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -153,6 +159,13 @@ func (ms *MeshServer) Start() error {
 			ms.nodeRegistry.PersistLoop(ms.nodeRegistryPath, 60*time.Second, ms.stopNodePersist)
 		}()
 	}
+
+	// Start offline detector goroutine
+	ms.wg.Add(1)
+	go func() {
+		defer ms.wg.Done()
+		ms.offlineDetectorLoop()
+	}()
 
 	slog.Info("Mesh server started", "port", ms.serialPort, "baud", ms.baudRate)
 	return nil
@@ -335,6 +348,10 @@ func (ms *MeshServer) handleHealthReport(msg *MeshMessage) error {
 		healthReport.HopCount,
 	)
 
+	if node, ok := ms.nodeRegistry.GetNode(healthReport.MAC); ok {
+		ms.publishHealthEvent(node)
+	}
+
 	slog.Info("Health report", "mac", macToString(healthReport.MAC), "adapterType", GetAdapterTypeName(healthReport.AdapterType), "uptime", healthReport.Uptime, "hops", healthReport.HopCount)
 
 	return nil
@@ -414,6 +431,10 @@ func (ms *MeshServer) handlePIRData(msg *MeshMessage) error {
 		slog.Warn("Failed to write PIR event to Kafka", "error", writeErr)
 	}
 
+	if node, ok := ms.nodeRegistry.GetNode(msg.OriginMacAddress); ok {
+		ms.publishMotionEvent(node)
+	}
+
 	return nil
 }
 
@@ -426,9 +447,10 @@ func (ms *MeshServer) handleMasterBeacon(msg *MeshMessage) error {
 // ApprovalParams carries optional identity fields for a node being approved.
 // NodeID 0 means auto-assign the lowest free ID.
 type ApprovalParams struct {
-	NodeID uint8
-	Name   string
-	Zone   string
+	NodeID         uint8
+	Name           string
+	Zone           string
+	AdapterTypeStr string // "pir", "led", etc. — for SSE enrolled event; empty = "unknown"
 }
 
 // ApproveEnrollment approves a pending node enrollment and sends a JOIN_ACK
@@ -451,6 +473,14 @@ func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) er
 
 	// Assign in node registry (creates entry if not yet seen)
 	ms.nodeRegistry.AssignNode(node.MAC[:], nodeId, params.Name, params.Zone)
+
+	if registryNode, ok := ms.nodeRegistry.GetNode(node.MAC[:]); ok {
+		typeStr := params.AdapterTypeStr
+		if typeStr == "" {
+			typeStr = "unknown"
+		}
+		ms.publishEnrolledEvent(registryNode, typeStr)
+	}
 
 	if ms.serialComm != nil {
 		// Send JOIN_ACK
@@ -601,6 +631,114 @@ func (ms *MeshServer) BroadcastData(dataType int32, data []byte) error {
 // GetNodeRegistry returns the node registry
 func (ms *MeshServer) GetNodeRegistry() *NodeRegistry {
 	return ms.nodeRegistry
+}
+
+// GetEventBroker returns the in-process event broker for SSE subscribers.
+func (ms *MeshServer) GetEventBroker() *EventBroker { return ms.eventBroker }
+
+// GetHealthTimeout returns the configured health timeout duration.
+func (ms *MeshServer) GetHealthTimeout() time.Duration { return ms.healthTimeout }
+
+// SendNodeData sends a serial command frame to a specific node MAC.
+func (ms *MeshServer) SendNodeData(mac []byte, dataType int32, data []byte) error {
+	payload := make([]byte, MaxDataLength)
+	copy(payload, data)
+	msg := &MeshMessage{
+		ProtoVersion: 2,
+		MessageType:  MessageTypeSerialCmdBroadcast,
+		DataType:     int32(dataType),
+		Data:         payload,
+	}
+	copy(msg.TargetMacAddress, mac)
+	return ms.serialComm.WriteFrame(msg)
+}
+
+// publishEvent marshals data and publishes a typed Event to the broker.
+func (ms *MeshServer) publishEvent(eventType EventType, data interface{}) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	ms.eventBroker.Publish(Event{Type: eventType, Data: raw, Timestamp: time.Now()})
+}
+
+// publishMotionEvent publishes a motion event for the given node.
+// Called from handlePIRData after the Kafka publish.
+func (ms *MeshServer) publishMotionEvent(node *NodeInfo) {
+	ms.publishEvent(EventMotion, map[string]interface{}{
+		"nodeId":    node.NodeID,
+		"name":      node.Name,
+		"zone":      node.Zone,
+		"hopCount":  node.HopCount,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// publishHealthEvent publishes a health event and, on first-seen, a node_online event.
+// Called from handleHealthReport after UpdateNode.
+func (ms *MeshServer) publishHealthEvent(node *NodeInfo) {
+	online := time.Since(node.LastSeen) <= ms.healthTimeout
+	ms.publishEvent(EventHealth, map[string]interface{}{
+		"nodeId":   node.NodeID,
+		"name":     node.Name,
+		"online":   online,
+		"uptime":   node.Uptime,
+		"hopCount": node.HopCount,
+	})
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if !ms.nodeOnlineState[node.MACString] {
+		ms.nodeOnlineState[node.MACString] = true
+		ms.publishEvent(EventNodeOnline, map[string]interface{}{
+			"nodeId": node.NodeID,
+			"name":   node.Name,
+		})
+	}
+}
+
+// publishEnrolledEvent publishes an enrolled event for the given node.
+// Called from ApproveEnrollment after AssignNode.
+func (ms *MeshServer) publishEnrolledEvent(node *NodeInfo, adapterTypeStr string) {
+	ms.publishEvent(EventEnrolled, map[string]interface{}{
+		"nodeId": node.NodeID,
+		"name":   node.Name,
+		"type":   adapterTypeStr,
+	})
+}
+
+// offlineDetectorLoop runs on a 30-second ticker and detects nodes that have
+// gone offline since the last health report.
+func (ms *MeshServer) offlineDetectorLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			ms.checkOfflineNodes()
+		case <-ms.ctx.Done():
+			return
+		}
+	}
+}
+
+// checkOfflineNodes scans all registered nodes and publishes EventNodeOffline
+// for any that were previously online but haven't reported within healthTimeout.
+func (ms *MeshServer) checkOfflineNodes() {
+	nodes := ms.nodeRegistry.GetAllNodes()
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	for _, node := range nodes {
+		if time.Since(node.LastSeen) > ms.healthTimeout {
+			if ms.nodeOnlineState[node.MACString] {
+				ms.nodeOnlineState[node.MACString] = false
+				ms.publishEvent(EventNodeOffline, map[string]interface{}{
+					"nodeId":   node.NodeID,
+					"name":     node.Name,
+					"lastSeen": node.LastSeen.UTC().Format(time.RFC3339),
+				})
+			}
+		}
+	}
 }
 
 // IsRunning returns whether the server is running

@@ -3,6 +3,7 @@ package mesh
 import (
 	"encoding/binary"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -89,6 +90,106 @@ func TestHandleNodeHealth_RegistersNode(t *testing.T) {
 	}
 	if node.HopCount != 2 {
 		t.Errorf("HopCount: got %d, want 2", node.HopCount)
+	}
+}
+
+func TestMeshServer_PublishesMotionEvent_OnPIRData(t *testing.T) {
+	ms := newTestMeshServer(t)
+	ch := ms.GetEventBroker().Subscribe()
+	defer ms.GetEventBroker().Unsubscribe(ch)
+
+	mac := []byte{0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x02}
+	ms.nodeRegistry.AssignNode(mac, 5, "stage-left", "stage")
+
+	data := make([]byte, MaxDataLength)
+	data[0] = byte(AdapterTypePIR)
+	copy(data[1:7], mac)
+	msg := &MeshMessage{
+		ProtoVersion:     2,
+		MessageType:      MessageTypeAdapterData,
+		DataType:         AdapterTypePIR,
+		Data:             data,
+		OriginMacAddress: mac,
+	}
+	if err := ms.handleMessage(msg); err != nil {
+		t.Fatalf("handleMessage: %v", err)
+	}
+
+	select {
+	case e := <-ch:
+		if e.Type != EventMotion {
+			t.Errorf("event type: %q, want %q", e.Type, EventMotion)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("no motion event within 200ms")
+	}
+}
+
+func TestMeshServer_PublishesNodeOnline_OnFirstHealthReport(t *testing.T) {
+	ms := newTestMeshServer(t)
+	ch := ms.GetEventBroker().Subscribe()
+	defer ms.GetEventBroker().Unsubscribe(ch)
+
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x01}
+	data := make([]byte, MaxDataLength)
+	data[0] = byte(OpHealthReport)
+	data[1] = byte(AdapterTypePIR)
+	copy(data[2:8], mac)
+	msg := &MeshMessage{
+		ProtoVersion:     2,
+		MessageType:      MessageTypeAdapterData,
+		DataType:         AdapterTypeSerial,
+		Data:             data,
+		OriginMacAddress: mac,
+	}
+	if err := ms.handleMessage(msg); err != nil {
+		t.Fatalf("handleMessage: %v", err)
+	}
+
+	var gotOnline bool
+	for {
+		select {
+		case e := <-ch:
+			if e.Type == EventNodeOnline {
+				gotOnline = true
+			}
+		case <-time.After(200 * time.Millisecond):
+			if !gotOnline {
+				t.Error("no node_online event")
+			}
+			return
+		}
+		if gotOnline {
+			return
+		}
+	}
+}
+
+func TestMeshServer_CheckOfflineNodes_PublishesOfflineEvent(t *testing.T) {
+	ms := newTestMeshServer(t)
+	ch := ms.GetEventBroker().Subscribe()
+	defer ms.GetEventBroker().Unsubscribe(ch)
+
+	mac := []byte{0xCA, 0xFE, 0xBA, 0xBE, 0x00, 0x01}
+	ms.nodeRegistry.AssignNode(mac, 3, "old-node", "lobby")
+	macStr := macToString(mac)
+
+	// mark as previously online
+	ms.mu.Lock()
+	ms.nodeOnlineState[macStr] = true
+	// set LastSeen 80s ago — exceeds 75s threshold
+	ms.nodeRegistry.nodes[macStr].LastSeen = time.Now().Add(-80 * time.Second)
+	ms.mu.Unlock()
+
+	ms.checkOfflineNodes()
+
+	select {
+	case e := <-ch:
+		if e.Type != EventNodeOffline {
+			t.Errorf("event type: %q, want %q", e.Type, EventNodeOffline)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("no node_offline event")
 	}
 }
 

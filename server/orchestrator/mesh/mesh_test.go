@@ -283,6 +283,54 @@ func TestNodeRegistry(t *testing.T) {
 			t.Errorf("NextFreeNodeID: got %d, want 3", id)
 		}
 	})
+
+	t.Run("GetNodeByID_ReturnsNode_WhenExists", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+		registry.AssignNode(mac, 7, "entrance-left", "lobby")
+		node, ok := registry.GetNodeByID(7)
+		if !ok {
+			t.Fatal("expected node, got nothing")
+		}
+		if node.NodeID != 7 {
+			t.Errorf("NodeID: %d, want 7", node.NodeID)
+		}
+		if node.Name != "entrance-left" {
+			t.Errorf("Name: %q", node.Name)
+		}
+	})
+
+	t.Run("GetNodeByID_ReturnsFalse_WhenMissing", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		if _, ok := registry.GetNodeByID(99); ok {
+			t.Error("expected false for unknown ID")
+		}
+	})
+
+	t.Run("GetNodesByZone_ReturnsOnlyZoneNodes", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		registry.AssignNode([]byte{0x01, 0, 0, 0, 0, 0}, 1, "a", "lobby")
+		registry.AssignNode([]byte{0x02, 0, 0, 0, 0, 0}, 2, "b", "lobby")
+		registry.AssignNode([]byte{0x03, 0, 0, 0, 0, 0}, 3, "c", "stage")
+		nodes := registry.GetNodesByZone("lobby")
+		if len(nodes) != 2 {
+			t.Errorf("len: %d, want 2", len(nodes))
+		}
+		for _, n := range nodes {
+			if n.Zone != "lobby" {
+				t.Errorf("unexpected zone %q", n.Zone)
+			}
+		}
+	})
+
+	t.Run("GetNodesByZone_ReturnsEmpty_WhenNoMatch", func(t *testing.T) {
+		registry := NewNodeRegistry()
+		registry.AssignNode([]byte{0x01, 0, 0, 0, 0, 0}, 1, "a", "lobby")
+		nodes := registry.GetNodesByZone("nowhere")
+		if len(nodes) != 0 {
+			t.Errorf("len: %d, want 0", len(nodes))
+		}
+	})
 }
 
 func TestGetOnlineNodes_ThresholdBoundary(t *testing.T) {

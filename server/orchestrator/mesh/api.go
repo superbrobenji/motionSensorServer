@@ -350,9 +350,10 @@ func (api *APIServer) getAllEnrollments(w http.ResponseWriter, r *http.Request) 
 
 // ApprovalRequest is the optional JSON body for the approve-enrollment endpoint.
 type ApprovalRequest struct {
-	NodeID uint8  `json:"nodeId"`
-	Name   string `json:"name"`
-	Zone   string `json:"zone"`
+	NodeID         uint8  `json:"nodeId"`
+	Name           string `json:"name"`
+	Zone           string `json:"zone"`
+	AdapterTypeStr string `json:"adapterTypeStr"`
 }
 
 // approveEnrollment approves a pending node enrollment
