@@ -143,7 +143,7 @@ func (nr *NodeRegistry) GetNodeByID(nodeId uint8) (*NodeInfo, bool) {
 	nr.mu.RLock()
 	defer nr.mu.RUnlock()
 	for _, n := range nr.nodes {
-		if n.NodeID == nodeId {
+		if n.NodeID == nodeId && n.Status != "replaced" {
 			nodeCopy := *n
 			nodeCopy.MAC = make([]byte, len(n.MAC))
 			copy(nodeCopy.MAC, n.MAC)

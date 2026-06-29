@@ -386,6 +386,10 @@ func TestMarkReplaced_ReplacedNodeNotReturnedByGetNodeByID(t *testing.T) {
 	if ok {
 		t.Error("GetNodeByID(7) must not return a replaced node")
 	}
+
+	if _, ok := nr.GetNodeByID(0); ok {
+		t.Error("GetNodeByID(0) must not return a replaced node")
+	}
 }
 
 func TestMarkReplaced_PersistsAndLoadsCorrectly(t *testing.T) {
