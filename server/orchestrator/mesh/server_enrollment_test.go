@@ -104,6 +104,30 @@ func TestApproveEnrollment_NilSerialComm_Succeeds(t *testing.T) {
 	}
 }
 
+func TestRejectEnrollment_SendsJoinAckToTargetMac(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mockPort := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(mockPort)
+
+	macStr, _ := enrollTestNode(t, ms)
+
+	if err := ms.RejectEnrollment(macStr); err != nil {
+		t.Fatalf("RejectEnrollment returned error: %v", err)
+	}
+
+	msg := decodeWrittenFrame(t, mockPort)
+	wantMAC := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	if !bytes.Equal(msg.TargetMacAddress, wantMAC) {
+		t.Errorf("TargetMacAddress = %x, want %x", msg.TargetMacAddress, wantMAC)
+	}
+	if len(msg.OriginMacAddress) != 0 {
+		t.Errorf("OriginMacAddress should be absent in rejection frame, got %x", msg.OriginMacAddress)
+	}
+	if len(msg.PublicKey) != 0 {
+		t.Errorf("PublicKey should be absent (rejection signal), got %x", msg.PublicKey)
+	}
+}
+
 func TestRejectEnrollment_SendsJoinAckWithEmptyPubKey(t *testing.T) {
 	ms := newTestMeshServer(t)
 	mockPort := NewMockSerialPort()

@@ -543,7 +543,7 @@ func (ms *MeshServer) RejectEnrollment(macStr string) error {
 	if ms.serialComm != nil {
 		rejectMsg := &MeshMessage{
 			MessageType:      MessageTypeJoinAck,
-			OriginMacAddress: mac[:],
+			TargetMacAddress: mac[:],
 			// PublicKey intentionally absent — rejection signal
 		}
 		if err := ms.serialComm.WriteFrame(rejectMsg); err != nil {
