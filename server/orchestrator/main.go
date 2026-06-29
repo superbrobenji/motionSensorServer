@@ -38,6 +38,8 @@ func main() {
 	// Command line flags
 	serialPort := flag.String("serial", envOrDefault("SERIAL_PORT", "/dev/ttyUSB0"), "Serial port for mesh communication")
 	baudRate := flag.Int("baud", envOrDefaultInt("BAUD_RATE", 115200), "Serial baud rate")
+	serialPortSecondary := envOrDefault("SERIAL_PORT_SECONDARY", "")
+	dualMasterEnabled := os.Getenv("DUAL_MASTER_ENABLED") == "true"
 	apiPort := flag.Int("port", envOrDefaultInt("API_PORT", 8080), "HTTP API port")
 	authRegistry := flag.String("auth-registry", authRegistryPath, "Path to node auth registry JSON")
 	nodeRegistry := flag.String("node-registry", nodeRegistryPath, "Path to node registry JSON")
@@ -51,6 +53,9 @@ func main() {
 
 	slog.Info("Starting Planetopia Motion Sensor Server")
 	slog.Info("Serial", "port", *serialPort, "baud", *baudRate)
+	if dualMasterEnabled && serialPortSecondary != "" {
+		slog.Info("Secondary serial port", "port", serialPortSecondary)
+	}
 	slog.Info("API Port", "port", *apiPort)
 	slog.Info("Kafka Broker", "broker", broker)
 
@@ -82,7 +87,13 @@ func main() {
 
 	// Setup mesh server
 	meshConfig := mesh.MeshServerConfig{
-		SerialPort:       *serialPort,
+		SerialPort: *serialPort,
+		SerialPortSecondary: func() string {
+			if dualMasterEnabled && serialPortSecondary != "" {
+				return serialPortSecondary
+			}
+			return ""
+		}(),
 		BaudRate:         *baudRate,
 		HealthTimeout:    30 * time.Second,
 		EventStore:       eventStore,
