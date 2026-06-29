@@ -353,6 +353,69 @@ func TestGetOnlineNodes_ThresholdBoundary(t *testing.T) {
 	}
 }
 
+func TestMarkReplaced_SetsStatusAndClearsNodeID(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	nr.AssignNode(mac, 7, "entrance-left", "lobby")
+
+	nr.MarkReplaced(mac, "11:22:33:44:55:66")
+
+	node, ok := nr.GetNode(mac)
+	if !ok {
+		t.Fatal("node must still exist in registry after MarkReplaced")
+	}
+	if node.Status != "replaced" {
+		t.Errorf("Status = %q, want %q", node.Status, "replaced")
+	}
+	if node.ReplacedBy != "11:22:33:44:55:66" {
+		t.Errorf("ReplacedBy = %q, want %q", node.ReplacedBy, "11:22:33:44:55:66")
+	}
+	if node.NodeID != 0 {
+		t.Errorf("NodeID = %d, want 0 after replacement", node.NodeID)
+	}
+}
+
+func TestMarkReplaced_ReplacedNodeNotReturnedByGetNodeByID(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	nr.AssignNode(mac, 7, "entrance-left", "lobby")
+
+	nr.MarkReplaced(mac, "11:22:33:44:55:66")
+
+	_, ok := nr.GetNodeByID(7)
+	if ok {
+		t.Error("GetNodeByID(7) must not return a replaced node")
+	}
+}
+
+func TestMarkReplaced_PersistsAndLoadsCorrectly(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	nr.AssignNode(mac, 7, "entrance-left", "lobby")
+	nr.MarkReplaced(mac, "11:22:33:44:55:66")
+
+	path := t.TempDir() + "/nodes.json"
+	if err := nr.Persist(path); err != nil {
+		t.Fatalf("Persist: %v", err)
+	}
+
+	nr2 := NewNodeRegistry()
+	if err := nr2.Load(path); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	node, ok := nr2.GetNode(mac)
+	if !ok {
+		t.Fatal("replaced node must survive Persist/Load round-trip")
+	}
+	if node.Status != "replaced" {
+		t.Errorf("Status after load = %q, want %q", node.Status, "replaced")
+	}
+	if node.ReplacedBy != "11:22:33:44:55:66" {
+		t.Errorf("ReplacedBy after load = %q, want %q", node.ReplacedBy, "11:22:33:44:55:66")
+	}
+}
+
 func TestSerialComm(t *testing.T) {
 	mockPort := NewMockSerialPort()
 	comm := NewSerialComm(mockPort)

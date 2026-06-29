@@ -23,6 +23,8 @@ type NodeInfo struct {
 	NodeID      uint8     `json:"nodeId,omitempty"`
 	Name        string    `json:"name,omitempty"`
 	Zone        string    `json:"zone,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	ReplacedBy  string    `json:"replacedBy,omitempty"`
 }
 
 // NodeRegistry manages the state of all known mesh nodes
@@ -201,6 +203,22 @@ func (nr *NodeRegistry) RemoveNode(mac []byte) bool {
 	return exists
 }
 
+// MarkReplaced marks a node as replaced by a new MAC address.
+// Sets Status = "replaced", ReplacedBy = replacedByMACStr, NodeID = 0
+// so the entry is preserved for audit but excluded from active-node queries.
+func (nr *NodeRegistry) MarkReplaced(mac []byte, replacedByMACStr string) {
+	macStr := macToString(mac)
+	nr.mu.Lock()
+	defer nr.mu.Unlock()
+	node, ok := nr.nodes[macStr]
+	if !ok {
+		return
+	}
+	node.Status = "replaced"
+	node.ReplacedBy = replacedByMACStr
+	node.NodeID = 0
+}
+
 // NodeCount returns the total number of registered nodes
 func (nr *NodeRegistry) NodeCount() int {
 	nr.mu.RLock()
@@ -217,6 +235,8 @@ type persistedNode struct {
 	NodeID      uint8     `json:"nodeId,omitempty"`
 	Name        string    `json:"name,omitempty"`
 	Zone        string    `json:"zone,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	ReplacedBy  string    `json:"replacedBy,omitempty"`
 }
 
 // Persist saves the registry to a JSON file at path.
@@ -233,6 +253,8 @@ func (nr *NodeRegistry) Persist(path string) error {
 			NodeID:      n.NodeID,
 			Name:        n.Name,
 			Zone:        n.Zone,
+			Status:      n.Status,
+			ReplacedBy:  n.ReplacedBy,
 		})
 	}
 	nr.mu.RUnlock()
@@ -280,6 +302,8 @@ func (nr *NodeRegistry) Load(path string) error {
 			NodeID:      e.NodeID,
 			Name:        e.Name,
 			Zone:        e.Zone,
+			Status:      e.Status,
+			ReplacedBy:  e.ReplacedBy,
 		}
 	}
 	slog.Info("Node registry loaded", "count", len(entries), "path", path)
