@@ -1,196 +1,133 @@
-# Quick Start Guide
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+Copyright (C) 2026 Planetopia Contributors
+-->
 
-## Linux/Unix Setup Guide
+# Quick Start
 
-## Fixed Docker Compose Issues
+## Prerequisites
 
-The Docker Compose configuration has been updated to fix the `jupyter` image issue and make the setup more flexible.
+- Docker and Docker Compose
+- (Optional) ESP32 master node connected via USB
 
-## Getting Started
+## 1. Configure environment
 
-### 1. Basic Setup (No Serial Device)
-
-If you just want to test the API and Kafka integration without a physical ESP32:
-
-```bash
-cd server
-docker-compose up -d
-```
-
-This will start:
-- **Kafka** on port 9092
-- **Jupyter Notebook** on port 8888
-- **Mesh Server API** on port 8080
-
-### 2. With USB Serial Device
-
-If you have an ESP32 connected via USB:
-
-#### Standard Linux Setup:
-1. **Find your serial port:**
-   ```bash
-   ls /dev/ttyUSB* /dev/ttyACM*
-   ```
-
-2. **Set permissions:**
-   ```bash
-   sudo chmod 666 /dev/ttyUSB0
-   # or add yourself to dialout group
-   sudo usermod -a -G dialout $USER
-   ```
-
-3. **Start services:**
-   ```bash
-   cd server
-   docker-compose up -d
-   ```
-
-#### Proxmox Container Setup:
-If running in a Proxmox container with USB passthrough:
-
-1. **Find your USB device:**
-   ```bash
-   ls /dev/bus/usb/*/
-   # Example output: /dev/bus/usb/003/002
-   ```
-
-2. **Check device permissions:**
-   ```bash
-   ls -la /dev/bus/usb/003/002
-   # Should show: crw-rw-r-- 1 root root 189, 257 ...
-   ```
-
-3. **Update docker-compose.yml:**
-   The docker-compose.yml file maps your USB device to `/dev/ttyUSB0` inside the container:
-   ```yaml
-   devices:
-     - "/dev/bus/usb/003/002:/dev/ttyUSB0"  # Your USB device path
-   user: "0:0"  # Run as root for USB access
-   privileged: true
-   ```
-
-4. **Start services:**
-   ```bash
-   cd server
-   docker-compose up -d
-   ```
-
-5. **If you still get permission errors:**
-   ```bash
-   # Option 1: Make device world-writable (temporary fix)
-   sudo chmod 666 /dev/bus/usb/003/002
-   
-   # Option 2: Add your user to dialout group
-   sudo usermod -a -G dialout $USER
-   # Then logout and login again
-   ```
-
-### 3. Environment Variables
-
-Create a `.env` file in the `server` directory:
 ```bash
 cp env.example .env
-# Edit .env with your settings
 ```
 
-Example `.env`:
+Open `.env` and set at minimum:
+
 ```
-SERIAL_PORT=/dev/ttyUSB0
-BAUD_RATE=115200
-API_PORT=8080
+API_KEY=<generate with: openssl rand -hex 32>
 ```
 
-## Testing the Setup
+All other variables have working defaults for local development.
 
-### 1. Check if services are running:
+## 2. Start services
+
 ```bash
-docker-compose ps
+docker compose up -d
 ```
 
-### 2. Test the API:
+This starts:
+| Service | Port | Description |
+|---------|------|-------------|
+| Orchestrator API | 8080 | REST API and mesh server |
+| Dashboard | 3000 | Web UI |
+| Kafka | 9092 | Event stream |
+| Jupyter | 8888 | Notebook environment |
+
+## 3. Verify
+
 ```bash
-curl http://localhost:8080/status
+curl -H "X-API-Key: $API_KEY" http://localhost:8080/status
 ```
 
-Expected response:
+Expected:
 ```json
-{
-  "success": true,
-  "data": {
-    "running": false,
-    "totalNodes": 0,
-    "onlineNodes": 0,
-    "timestamp": 1704067200
-  }
-}
+{"success":true,"data":{"running":false,"totalNodes":0,"onlineNodes":0,"timestamp":1704067200}}
 ```
 
-### 3. Start the mesh server:
+## 4. Start the mesh server
+
 ```bash
-curl -X POST http://localhost:8080/server/start
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8080/server/start
 ```
 
-### 4. Check nodes (after connecting ESP32):
+## USB Serial Device Setup
+
+### Standard Linux
+
 ```bash
-curl http://localhost:8080/nodes
+# Find your device
+ls /dev/ttyUSB* /dev/ttyACM*
+
+# Grant access
+sudo usermod -a -G dialout $USER
+# Log out and back in
+
+# Update .env
+SERIAL_PORT=/dev/ttyUSB0
 ```
 
-### 5. Request health reports:
+### Proxmox Container
+
+If running inside a Proxmox LXC with USB passthrough:
+
 ```bash
-curl -X POST http://localhost:8080/health/request
+# Find the USB device path
+ls /dev/bus/usb/*/
+
+# Example: /dev/bus/usb/003/002
+# Update docker-compose.yml devices section:
+#   devices:
+#     - "/dev/bus/usb/003/002:/dev/ttyUSB0"
 ```
 
-## Accessing Services
+## Checking nodes
 
-- **Mesh Server API**: http://localhost:8080
-- **Jupyter Notebook**: http://localhost:8888
-- **Kafka**: localhost:9092 (internal)
+After connecting an ESP32 master node:
+
+```bash
+# List enrolled nodes
+curl -H "X-API-Key: $API_KEY" http://localhost:8080/nodes
+
+# Request health reports from all nodes
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8080/health/request
+```
 
 ## Troubleshooting
 
-### Docker Issues
+### Service not starting
+
 ```bash
-# View logs
-docker-compose logs -f orchestrator
-
-# Restart services
-docker-compose restart
-
-# Clean rebuild
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+docker compose ps
+docker compose logs orchestrator
+docker compose logs kafka
 ```
 
-### Serial Port Issues
+### Serial port errors
+
 ```bash
-# Check if device exists
-ls -la /dev/ttyUSB*
-
-# Check permissions
 ls -la /dev/ttyUSB0
-
-# Fix permissions
 sudo chmod 666 /dev/ttyUSB0
 ```
 
-### API Not Responding
+### API returns 401
+
+`API_KEY` in `.env` does not match the header. Verify with:
 ```bash
-# Check if container is running
-docker-compose ps orchestrator
-
-# Check container logs
-docker-compose logs orchestrator
-
-# Test from inside container
-docker-compose exec orchestrator curl localhost:8080/status
+grep API_KEY .env
 ```
 
-## Next Steps
+### Clean rebuild
 
-1. Connect your ESP32 master node via USB
-2. Configure nodes using the API
-3. Monitor PIR events in Kafka
-4. Use Jupyter notebooks for data analysis
+```bash
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
 
-See `orchestrator/README.md` for complete documentation.
+See [orchestrator/README.md](orchestrator/README.md) for full API reference and
+protocol documentation.
