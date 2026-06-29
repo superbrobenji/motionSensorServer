@@ -21,7 +21,9 @@ func TestV1Nodes_GetAll_ReturnsAssignedNodes(t *testing.T) {
 		t.Fatalf("status: %d", w.Code)
 	}
 	var resp APIResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if !resp.Success {
 		t.Error("expected success")
 	}
@@ -34,10 +36,14 @@ func TestV1Nodes_GetAll_ExcludesUnassignedNodes(t *testing.T) {
 	ms.nodeRegistry.UpdateNode(mac, AdapterTypePIR, 100, 1)
 	w := v1Request(t, api, "GET", "/api/v1/nodes", nil)
 	var resp APIResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	data, _ := json.Marshal(resp.Data)
 	var nodes []NodeV1
-	json.Unmarshal(data, &nodes)
+	if err := json.Unmarshal(data, &nodes); err != nil {
+		t.Fatalf("unmarshal nodes: %v", err)
+	}
 	if len(nodes) != 0 {
 		t.Errorf("got %d nodes, want 0 (unassigned excluded)", len(nodes))
 	}

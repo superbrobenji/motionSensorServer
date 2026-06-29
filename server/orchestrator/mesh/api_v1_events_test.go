@@ -95,7 +95,9 @@ func TestV1Status_ReturnsStructuredStatus(t *testing.T) {
 		t.Fatalf("status: %d", w.Code)
 	}
 	var resp APIResponse
-	json.NewDecoder(w.Body).Decode(&resp)
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if !resp.Success {
 		t.Error("expected success")
 	}

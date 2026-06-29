@@ -520,8 +520,12 @@ func TestZoneRegistry_Add_DuplicateReturnsError(t *testing.T) {
 
 func TestZoneRegistry_List(t *testing.T) {
 	zr := NewZoneRegistry()
-	zr.Add("lobby")
-	zr.Add("stage")
+	if _, err := zr.Add("lobby"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zr.Add("stage"); err != nil {
+		t.Fatal(err)
+	}
 	zones := zr.List()
 	if len(zones) != 2 {
 		t.Errorf("len: %d, want 2", len(zones))
@@ -530,7 +534,9 @@ func TestZoneRegistry_List(t *testing.T) {
 
 func TestZoneRegistry_Update(t *testing.T) {
 	zr := NewZoneRegistry()
-	zr.Add("lobby")
+	if _, err := zr.Add("lobby"); err != nil {
+		t.Fatal(err)
+	}
 	z, ok := zr.Update("lobby", "Lobby Area")
 	if !ok {
 		t.Fatal("Update returned false")
