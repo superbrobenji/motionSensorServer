@@ -95,7 +95,8 @@ func (zr *ZoneRegistry) Persist(path string) error {
 	zr.mu.RLock()
 	zones := make([]*ZoneV1, 0, len(zr.zones))
 	for _, z := range zr.zones {
-		zones = append(zones, z)
+		cp := *z
+		zones = append(zones, &cp)
 	}
 	zr.mu.RUnlock()
 	data, err := json.MarshalIndent(zones, "", "  ")

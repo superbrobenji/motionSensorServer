@@ -575,6 +575,17 @@ func TestZoneRegistry_PersistAndLoad(t *testing.T) {
 	}
 }
 
+func TestZoneRegistry_Load_MissingFile(t *testing.T) {
+	zr := NewZoneRegistry()
+	err := zr.Load("/tmp/does-not-exist-zone-registry-test.json")
+	if err != nil {
+		t.Errorf("Load on missing file should be no-op, got error: %v", err)
+	}
+	if len(zr.List()) != 0 {
+		t.Error("registry should be empty after loading missing file")
+	}
+}
+
 func TestHandlePIRData_KafkaWriteError(t *testing.T) {
 	mockStore := NewMockEventStore()
 	registry := NewNodeRegistry()

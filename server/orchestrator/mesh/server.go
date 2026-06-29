@@ -653,7 +653,9 @@ func (ms *MeshServer) GetZoneRegistry() *ZoneRegistry { return ms.zoneRegistry }
 
 // SetZoneRegistryPath sets the persistence path and loads existing zones.
 func (ms *MeshServer) SetZoneRegistryPath(path string) {
+	ms.mu.Lock()
 	ms.zoneRegistryPath = path
+	ms.mu.Unlock()
 	if path != "" {
 		_ = ms.zoneRegistry.Load(path)
 	}
