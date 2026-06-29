@@ -92,9 +92,9 @@ func (nr *NodeRegistry) NextFreeNodeID() uint8 {
 			used[n.NodeID] = true
 		}
 	}
-	for id := uint8(1); id <= 255; id++ {
-		if !used[id] {
-			return id
+	for id := 1; id <= 255; id++ {
+		if !used[uint8(id)] {
+			return uint8(id)
 		}
 	}
 	return 0 // all 255 IDs in use

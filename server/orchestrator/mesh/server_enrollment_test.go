@@ -148,6 +148,11 @@ func TestApproveEnrollment_SendsNodeIdSet_AfterJoinAck(t *testing.T) {
 	if idMsg.Data[7] != 7 {
 		t.Errorf("nodeId in frame = %d, want 7", idMsg.Data[7])
 	}
+	// target MAC must match the enrolled node's MAC
+	wantMAC := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF} // from enrollTestNode helper
+	if !bytes.Equal(idMsg.Data[1:7], wantMAC) {
+		t.Errorf("OP_NODE_ID_SET target MAC = %x, want %x", idMsg.Data[1:7], wantMAC)
+	}
 }
 
 func TestApproveEnrollment_AutoAssignsNodeId_WhenZero(t *testing.T) {
