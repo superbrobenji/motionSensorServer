@@ -353,6 +353,43 @@ func TestGetOnlineNodes_ThresholdBoundary(t *testing.T) {
 	}
 }
 
+func TestGetNodesByZone_ExcludesReplacedNodes(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac1 := []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x01}
+	mac2 := []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x02}
+	nr.AssignNode(mac1, 1, "sensor-a", "lobby")
+	nr.AssignNode(mac2, 2, "sensor-b", "lobby")
+	nr.MarkReplaced(mac1, macToString(mac2))
+
+	nodes := nr.GetNodesByZone("lobby")
+	if len(nodes) != 1 {
+		t.Errorf("GetNodesByZone: got %d nodes, want 1 (replaced node must be excluded)", len(nodes))
+	}
+	if len(nodes) == 1 && nodes[0].MACString != macToString(mac2) {
+		t.Errorf("GetNodesByZone: got node %s, want %s", nodes[0].MACString, macToString(mac2))
+	}
+}
+
+func TestGetOnlineNodes_ExcludesReplacedNodes(t *testing.T) {
+	nr := NewNodeRegistry()
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x01}
+
+	// Get baseline count before adding the node
+	baseline := len(nr.GetOnlineNodes(60 * time.Second))
+
+	nr.UpdateNode(mac, AdapterTypePIR, 500, 1)
+	afterUpdate := len(nr.GetOnlineNodes(60 * time.Second))
+	if afterUpdate != baseline+1 {
+		t.Errorf("GetOnlineNodes after UpdateNode: got %d, want %d", afterUpdate, baseline+1)
+	}
+
+	nr.MarkReplaced(mac, "aa:bb:cc:dd:ee:ff")
+	afterReplace := len(nr.GetOnlineNodes(60 * time.Second))
+	if afterReplace != baseline {
+		t.Errorf("GetOnlineNodes after MarkReplaced: got %d, want %d (replaced node must be excluded)", afterReplace, baseline)
+	}
+}
+
 func TestMarkReplaced_SetsStatusAndClearsNodeID(t *testing.T) {
 	nr := NewNodeRegistry()
 	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}

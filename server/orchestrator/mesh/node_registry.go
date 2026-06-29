@@ -72,8 +72,9 @@ func (nr *NodeRegistry) AssignNode(mac []byte, nodeId uint8, name, zone string) 
 	node, exists := nr.nodes[macStr]
 	if !exists {
 		node = &NodeInfo{
-			MAC:       make([]byte, len(mac)),
-			MACString: macStr,
+			MAC:         make([]byte, len(mac)),
+			MACString:   macStr,
+			AdapterType: AdapterTypeUnknown,
 		}
 		copy(node.MAC, mac)
 		nr.nodes[macStr] = node
@@ -159,7 +160,7 @@ func (nr *NodeRegistry) GetNodesByZone(zone string) []*NodeInfo {
 	defer nr.mu.RUnlock()
 	result := make([]*NodeInfo, 0)
 	for _, n := range nr.nodes {
-		if n.Zone == zone {
+		if n.Zone == zone && n.Status != "replaced" {
 			nodeCopy := *n
 			nodeCopy.MAC = make([]byte, len(n.MAC))
 			copy(nodeCopy.MAC, n.MAC)
@@ -178,7 +179,7 @@ func (nr *NodeRegistry) GetOnlineNodes(timeout time.Duration) []*NodeInfo {
 	nodes := make([]*NodeInfo, 0)
 	
 	for _, node := range nr.nodes {
-		if node.LastSeen.After(cutoff) {
+		if node.LastSeen.After(cutoff) && node.Status != "replaced" {
 			// Return a copy to avoid race conditions
 			nodeCopy := *node
 			nodeCopy.MAC = make([]byte, len(node.MAC))

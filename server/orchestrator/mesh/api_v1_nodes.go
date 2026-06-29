@@ -14,7 +14,7 @@ func (api *APIServer) v1GetNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := api.meshServer.GetNodeRegistry().GetAllNodes()
 	result := make([]NodeV1, 0, len(nodes))
 	for _, n := range nodes {
-		if n.NodeID > 0 { // only include nodes with assigned IDs
+		if n.NodeID > 0 && n.Status != "replaced" { // only include active nodes with assigned IDs
 			result = append(result, nodeToV1(n, timeout))
 		}
 	}
