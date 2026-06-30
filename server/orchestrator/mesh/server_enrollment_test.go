@@ -24,7 +24,7 @@ func enrollTestNode(t *testing.T, ms *MeshServer) (macStr string, pubKey [32]byt
 	if err := ms.authRegistry.AddPending(mac, pubKey); err != nil {
 		t.Fatalf("AddPending failed: %v", err)
 	}
-	return "aabbccddeeff", pubKey
+	return "aa:bb:cc:dd:ee:ff", pubKey
 }
 
 // enrollTestNodeWithMAC adds a pending enrollment for the given MAC address.
@@ -36,7 +36,7 @@ func enrollTestNodeWithMAC(t *testing.T, ms *MeshServer, mac [6]byte) (macStr st
 	if err := ms.authRegistry.AddPending(mac, pubKey); err != nil {
 		t.Fatalf("AddPending failed: %v", err)
 	}
-	return fmt.Sprintf("%02x%02x%02x%02x%02x%02x",
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
 		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]), pubKey
 }
 

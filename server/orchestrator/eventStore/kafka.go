@@ -44,11 +44,13 @@ func (s *store) WriteMessage(event string, topic string) error {
 		return fmt.Errorf("not connected")
 	}
 	slog.Debug("Delivering message", "topic", topic)
-	err := s.writer.WriteMessages(context.Background(),
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err := s.writer.WriteMessages(ctx,
 		kafka.Message{Topic: topic, Value: []byte(event)},
 	)
 	if err != nil {
-		slog.Error("Kafka delivery failed", "error", err)
+		slog.Error("Kafka delivery failed", "topic", topic, "error", err)
 		return err
 	}
 	slog.Debug("Delivered message", "topic", topic)

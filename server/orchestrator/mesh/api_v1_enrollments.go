@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -11,12 +12,32 @@ import (
 
 func (api *APIServer) v1GetPendingEnrollments(w http.ResponseWriter, r *http.Request) {
 	pending := api.meshServer.GetPendingEnrollments()
-	api.writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: pending})
+	out := make([]enrollmentResponse, 0, len(pending))
+	for _, n := range pending {
+		out = append(out, enrollmentResponse{
+			MAC:        n.MACString,
+			PublicKey:  fmt.Sprintf("%x", n.PublicKey),
+			Status:     int(n.Status),
+			ReceivedAt: n.ReceivedAt.Unix(),
+			ApprovedAt: n.ApprovedAt.Unix(),
+		})
+	}
+	api.writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: out})
 }
 
 func (api *APIServer) v1GetAllEnrollments(w http.ResponseWriter, r *http.Request) {
 	all := api.meshServer.GetAuthRegistry().GetAll()
-	api.writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: all})
+	out := make([]enrollmentResponse, 0, len(all))
+	for _, n := range all {
+		out = append(out, enrollmentResponse{
+			MAC:        n.MACString,
+			PublicKey:  fmt.Sprintf("%x", n.PublicKey),
+			Status:     int(n.Status),
+			ReceivedAt: n.ReceivedAt.Unix(),
+			ApprovedAt: n.ApprovedAt.Unix(),
+		})
+	}
+	api.writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: out})
 }
 
 func (api *APIServer) v1ApproveEnrollment(w http.ResponseWriter, r *http.Request) {

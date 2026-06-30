@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 
+	"go.bug.st/serial"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -13,6 +14,16 @@ import (
 type SerialPort interface {
 	io.ReadWriter
 	Close() error
+	Flush() error
+}
+
+// realSerialPort wraps go.bug.st/serial Port to satisfy SerialPort interface.
+type realSerialPort struct {
+	serial.Port
+}
+
+func (p *realSerialPort) Flush() error {
+	return p.ResetInputBuffer()
 }
 
 // SerialComm handles serial communication with framing
@@ -114,26 +125,8 @@ func (s *SerialComm) Close() error {
 // FlushBuffer attempts to clear any buffered data from the serial port
 func (s *SerialComm) FlushBuffer() error {
 	slog.Debug("Flushing serial buffer")
-
-	// Try to read any remaining data with a short timeout
-	buffer := make([]byte, 1024)
-	totalFlushed := 0
-
-	for i := 0; i < 10; i++ { // Try up to 10 times
-		n, err := s.port.Read(buffer)
-		if err != nil {
-			if err == io.EOF {
-				break // No more data
-			}
-			slog.Debug("Error during flush", "error", err)
-			break
-		}
-		if n == 0 {
-			break // No data available
-		}
-		totalFlushed += n
+	if err := s.port.Flush(); err != nil {
+		slog.Debug("Flush failed", "error", err)
 	}
-
-	slog.Debug("Serial buffer flushed", "bytes", totalFlushed)
 	return nil
 }

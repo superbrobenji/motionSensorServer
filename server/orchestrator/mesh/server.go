@@ -153,12 +153,12 @@ func (ms *MeshServer) Start() error {
 		StopBits: serial.OneStopBit,
 	}
 
-	port, err := serial.Open(ms.serialPort, mode)
+	rawPort, err := serial.Open(ms.serialPort, mode)
 	if err != nil {
 		return fmt.Errorf("failed to open serial port %s: %w", ms.serialPort, err)
 	}
 
-	ms.serialComm = NewSerialComm(port)
+	ms.serialComm = NewSerialComm(&realSerialPort{rawPort})
 	ms.running = true
 	SetSerialConnected(true)
 	ms.frameTimeMu.Lock()
@@ -175,7 +175,7 @@ func (ms *MeshServer) Start() error {
 			slog.Warn("Failed to open secondary serial port — continuing single-master",
 				"port", ms.secondaryPort, "error", secErr)
 		} else {
-			ms.secondarySerialComm = NewSerialComm(secondaryPhysPort)
+			ms.secondarySerialComm = NewSerialComm(&realSerialPort{secondaryPhysPort})
 			ms.secondaryConnected = true
 			ms.wg.Add(1)
 			go ms.messageProcessor(ms.secondarySerialComm, "secondary")
@@ -902,6 +902,19 @@ func (ms *MeshServer) IsRunning() bool {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.running
+}
+
+// IsMasterOnline returns true if the primary master node has sent a frame
+// within the configured health timeout. Returns false if no frame has ever
+// been received (zero time).
+func (ms *MeshServer) IsMasterOnline() bool {
+	ms.frameTimeMu.Lock()
+	t := ms.primaryLastFrameAt
+	ms.frameTimeMu.Unlock()
+	if t.IsZero() {
+		return false
+	}
+	return time.Since(t) < ms.healthTimeout
 }
 
 // SerialStatus returns the connection state of primary and secondary serial ports,

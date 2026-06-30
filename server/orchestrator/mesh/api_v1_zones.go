@@ -60,26 +60,5 @@ func (api *APIServer) v1ZoneCommand(w http.ResponseWriter, r *http.Request) {
 		api.writeError(w, http.StatusNotFound, "zone not found")
 		return
 	}
-	var body struct {
-		Action string                 `json:"action"`
-		Params map[string]interface{} `json:"params"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Action == "" {
-		api.writeError(w, http.StatusBadRequest, "action is required")
-		return
-	}
-	if body.Action != "trigger" {
-		api.writeError(w, http.StatusNotImplemented, "action not supported")
-		return
-	}
-	nodes := api.meshServer.GetNodeRegistry().GetNodesByZone(id)
-	payload := make([]byte, MaxDataLength)
-	payload[0] = 0xD0 // trigger placeholder opcode
-	sent := 0
-	for _, node := range nodes {
-		if err := api.meshServer.SendNodeData(node.MAC, int32(AdapterTypeSerial), payload); err == nil {
-			sent++
-		}
-	}
-	api.writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: map[string]int{"sent": sent}})
+	api.writeError(w, http.StatusNotImplemented, "zone commands not yet implemented — pending shared protocol repo (Phase 3)")
 }

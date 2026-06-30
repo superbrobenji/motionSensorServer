@@ -3,6 +3,7 @@ package mesh
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -37,6 +38,8 @@ func (m *MockSerialPort) Write(p []byte) (int, error) {
 func (m *MockSerialPort) Close() error {
 	return nil
 }
+
+func (m *MockSerialPort) Flush() error { return nil }
 
 func (m *MockSerialPort) AddReadData(data []byte) {
 	m.readBuffer.Write(data)
@@ -540,6 +543,23 @@ func TestMarkReplaced_PersistsAndLoadsCorrectly(t *testing.T) {
 	}
 }
 
+func TestFlushBuffer_CompletesQuickly(t *testing.T) {
+	mockPort := NewMockSerialPort()
+	comm := NewSerialComm(mockPort)
+
+	done := make(chan error, 1)
+	go func() { done <- comm.FlushBuffer() }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("FlushBuffer() = %v, want nil", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("FlushBuffer() blocked for >500ms")
+	}
+}
+
 func TestSerialComm(t *testing.T) {
 	mockPort := NewMockSerialPort()
 	comm := NewSerialComm(mockPort)
@@ -876,6 +896,52 @@ func TestHandlePIRData_KafkaWriteError(t *testing.T) {
 	}
 }
 
+func TestV1GetPendingEnrollments_ResponseFormat(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mac := [6]byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	var pubKey [32]byte
+	for i := range pubKey {
+		pubKey[i] = byte(i + 1)
+	}
+	if err := ms.authRegistry.AddPending(mac, pubKey); err != nil {
+		t.Fatalf("AddPending: %v", err)
+	}
+
+	api := NewAPIServer(ms, "", nil)
+	req := httptest.NewRequest("GET", "/api/v1/enrollments/pending", nil)
+	rr := httptest.NewRecorder()
+	api.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+
+	var resp struct {
+		Success bool `json:"success"`
+		Data    []struct {
+			MAC       string `json:"mac"`
+			PublicKey string `json:"publicKey"`
+			Status    int    `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("len(data) = %d, want 1", len(resp.Data))
+	}
+	entry := resp.Data[0]
+
+	// MAC must be colon-separated hex (17 chars), NOT base64
+	if len(entry.MAC) != 17 {
+		t.Errorf("MAC = %q (len %d), want 17-char colon-separated hex like aa:bb:cc:dd:ee:ff", entry.MAC, len(entry.MAC))
+	}
+	// PublicKey must be hex string (64 chars), NOT base64
+	if len(entry.PublicKey) != 64 {
+		t.Errorf("PublicKey len = %d, want 64 (hex)", len(entry.PublicKey))
+	}
+}
+
 func TestCORSMiddleware_AllowsPatchAndDelete(t *testing.T) {
 	handler := CORSMiddleware([]string{"http://localhost:3000"})(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
@@ -892,5 +958,68 @@ func TestCORSMiddleware_AllowsPatchAndDelete(t *testing.T) {
 		if !strings.Contains(allowed, method) {
 			t.Errorf("preflight for %s: Allow-Methods = %q, want to contain %q", method, allowed, method)
 		}
+	}
+}
+
+func TestIsMasterOnline_FalseWhenNoFrameReceived(t *testing.T) {
+	ms := newTestMeshServer(t)
+	// No frames received — primaryLastFrameAt is zero
+	if ms.IsMasterOnline() {
+		t.Error("IsMasterOnline() = true, want false when no frame received")
+	}
+}
+
+func TestIsMasterOnline_TrueAfterRecentFrame(t *testing.T) {
+	ms := newTestMeshServer(t)
+	ms.frameTimeMu.Lock()
+	ms.primaryLastFrameAt = time.Now()
+	ms.frameTimeMu.Unlock()
+
+	if !ms.IsMasterOnline() {
+		t.Error("IsMasterOnline() = false, want true after recent frame")
+	}
+}
+
+func TestIsMasterOnline_FalseAfterTimeout(t *testing.T) {
+	ms := newTestMeshServer(t)
+	ms.frameTimeMu.Lock()
+	ms.primaryLastFrameAt = time.Now().Add(-80 * time.Second) // older than 75s timeout
+	ms.frameTimeMu.Unlock()
+
+	if ms.IsMasterOnline() {
+		t.Error("IsMasterOnline() = true, want false after healthTimeout elapsed")
+	}
+}
+
+func TestV1NodeCommand_Returns501(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	ms.nodeRegistry.AssignNode(mac, 1, "test-node", "zone-a")
+
+	apiServer := NewAPIServer(ms, "", nil)
+	body := strings.NewReader(`{"action":"trigger"}`)
+	req := httptest.NewRequest("POST", "/api/v1/nodes/1/command", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	apiServer.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotImplemented {
+		t.Errorf("status = %d, want 501", rr.Code)
+	}
+}
+
+func TestV1ZoneCommand_Returns501(t *testing.T) {
+	ms := newTestMeshServer(t)
+	zone, _ := ms.GetZoneRegistry().Add("stage")
+
+	apiServer := NewAPIServer(ms, "", nil)
+	body := strings.NewReader(`{"action":"trigger"}`)
+	req := httptest.NewRequest("POST", "/api/v1/zones/"+zone.ID+"/command", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	apiServer.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotImplemented {
+		t.Errorf("status = %d, want 501", rr.Code)
 	}
 }

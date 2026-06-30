@@ -112,29 +112,11 @@ func (api *APIServer) v1NodeCommand(w http.ResponseWriter, r *http.Request) {
 		api.writeError(w, http.StatusBadRequest, "invalid node id")
 		return
 	}
-	node, ok := api.meshServer.GetNodeRegistry().GetNodeByID(id)
-	if !ok {
+	if _, ok := api.meshServer.GetNodeRegistry().GetNodeByID(id); !ok {
 		api.writeError(w, http.StatusNotFound, "node not found")
 		return
 	}
-	var body struct {
-		Action string `json:"action"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Action == "" {
-		api.writeError(w, http.StatusBadRequest, "action is required")
-		return
-	}
-	if body.Action != "trigger" {
-		api.writeError(w, http.StatusNotImplemented, "action not supported")
-		return
-	}
-	payload := make([]byte, MaxDataLength)
-	payload[0] = 0xD0 // trigger placeholder opcode
-	if err := api.meshServer.SendNodeData(node.MAC, int32(AdapterTypeSerial), payload); err != nil {
-		api.writeError(w, http.StatusInternalServerError, "failed to send command")
-		return
-	}
-	api.writeJSON(w, http.StatusOK, APIResponse{Success: true})
+	api.writeError(w, http.StatusNotImplemented, "node commands not yet implemented — pending shared protocol repo (Phase 3)")
 }
 
 // parseNodeID converts a URL path segment to a uint8 node ID (1-255).

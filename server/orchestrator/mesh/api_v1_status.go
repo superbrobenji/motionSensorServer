@@ -48,7 +48,7 @@ func (api *APIServer) v1Status(w http.ResponseWriter, r *http.Request) {
 				"offline": total - online,
 			},
 			"mesh": map[string]bool{
-				"masterOnline": api.meshServer.IsRunning(),
+				"masterOnline": api.meshServer.IsMasterOnline(),
 			},
 		},
 	})
