@@ -98,6 +98,45 @@ func TestAuthMiddleware_ProtectsRoutes(t *testing.T) {
 	}
 }
 
+// TestGetHealth verifies that /health is reachable without authentication
+// and returns 200 + {"ok":true}.  This is the endpoint targeted by the
+// Docker Compose and Dockerfile HEALTHCHECK so the orchestrator container
+// can be marked healthy even when API_KEY is set.
+func TestGetHealth(t *testing.T) {
+	// No-auth server (same as regular newTestAPIServer)
+	api := newTestAPIServer(t)
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if body != `{"ok":true}`+"\n" {
+		t.Errorf("unexpected body: %q", body)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %q", ct)
+	}
+}
+
+func TestGetHealth_NoAuthRequired(t *testing.T) {
+	// Server with auth key set — /health must still return 200
+	ms := newTestMeshServer(t)
+	api := NewAPIServer(ms, "test-key", nil)
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	// Deliberately no Authorization header
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("/health should be public (200 without auth), got %d", w.Code)
+	}
+}
+
 func TestIsValidAdapterType_AllKnownTypes(t *testing.T) {
 	valid := []int32{AdapterTypeUnknown, AdapterTypePIR, AdapterTypeWIFI, AdapterTypeLED, AdapterTypeSerial}
 	for _, v := range valid {
