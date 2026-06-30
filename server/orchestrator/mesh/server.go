@@ -426,6 +426,8 @@ func (ms *MeshServer) handleSerialData(msg *MeshMessage) error {
 	switch opcode {
 	case OpHealthReport, OpNodeHealth:
 		return ms.handleHealthReport(msg)
+	case OpCommandAck:
+		ms.handleCommandAck(msg)
 	default:
 		slog.Warn("Unknown serial opcode", "opcode", fmt.Sprintf("0x%02x", opcode))
 	}
@@ -455,6 +457,33 @@ func (ms *MeshServer) handleHealthReport(msg *MeshMessage) error {
 	slog.Info("Health report", "mac", macToString(healthReport.MAC), "adapterType", GetAdapterTypeName(healthReport.AdapterType), "uptime", healthReport.Uptime, "hops", healthReport.HopCount)
 
 	return nil
+}
+
+// handleCommandAck processes OP_COMMAND_ACK frames sent by nodes to acknowledge
+// a previously issued command. It resolves the full command ID from the 2-byte
+// correlation token in the payload, marks the command acked in the store, and
+// publishes a command_ack SSE event.
+func (ms *MeshServer) handleCommandAck(msg *MeshMessage) {
+	if len(msg.Data) < 3 {
+		slog.Warn("OP_COMMAND_ACK frame too short", "len", len(msg.Data))
+		return
+	}
+	token := [2]byte{msg.Data[1], msg.Data[2]}
+	commandID, ok := ms.commandStore.AckByToken(token)
+	if !ok {
+		slog.Warn("OP_COMMAND_ACK: no matching pending command for token", "token", token)
+		return
+	}
+	nodeID := uint8(0)
+	if cmd, found := ms.commandStore.Get(commandID); found {
+		nodeID = cmd.NodeID
+	}
+	ms.publishEvent(EventCommandAck, map[string]interface{}{
+		"commandId": commandID,
+		"nodeId":    nodeID,
+		"status":    "ok",
+	})
+	slog.Info("Command acknowledged", "commandId", commandID, "nodeId", nodeID)
 }
 
 // handleEnrollmentRequest processes an enrollment request from a new node.

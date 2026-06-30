@@ -38,6 +38,9 @@ const (
 	OpHealthReq    byte = 0xB0 // Request health reports
 	OpHealthReport byte = 0xB1 // Node → server health status
 	OpNodeHealth   byte = 0xB2 // PIR (non-serial) node → server health status; transport: AdapterTypeSerial
+
+	// Ack opcode — mirrors opcodes.OpCommandAck (0xE0) from the shared protocol.
+	OpCommandAck = opcodes.OpCommandAck // Node → server: acknowledge a received command
 )
 
 // Enrollment Message Type Constants
