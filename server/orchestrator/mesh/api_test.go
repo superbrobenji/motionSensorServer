@@ -43,7 +43,7 @@ func TestStartAPIServer_ReturnsNonNilShutdown(t *testing.T) {
 	ms := newTestMeshServer(t)
 	port := freePort(t)
 
-	shutdown, err := StartAPIServer(ms, port, "", nil)
+	shutdown, err := StartAPIServer(ms, port, "", "", nil)
 	if err != nil {
 		t.Fatalf("StartAPIServer returned error: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestStartAPIServer_AcceptsHTTPConnection(t *testing.T) {
 	ms := newTestMeshServer(t)
 	port := freePort(t)
 
-	shutdown, err := StartAPIServer(ms, port, "", nil)
+	shutdown, err := StartAPIServer(ms, port, "", "", nil)
 	if err != nil {
 		t.Fatalf("StartAPIServer returned error: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestStartAPIServer_ShutdownCompletesWithoutError(t *testing.T) {
 	ms := newTestMeshServer(t)
 	port := freePort(t)
 
-	shutdown, err := StartAPIServer(ms, port, "", nil)
+	shutdown, err := StartAPIServer(ms, port, "", "", nil)
 	if err != nil {
 		t.Fatalf("StartAPIServer returned error: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestStartAPIServer_RejectsConnectionsAfterShutdown(t *testing.T) {
 	ms := newTestMeshServer(t)
 	port := freePort(t)
 
-	shutdown, err := StartAPIServer(ms, port, "", nil)
+	shutdown, err := StartAPIServer(ms, port, "", "", nil)
 	if err != nil {
 		t.Fatalf("StartAPIServer returned error: %v", err)
 	}

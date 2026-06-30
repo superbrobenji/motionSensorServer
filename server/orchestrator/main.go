@@ -130,6 +130,12 @@ func main() {
 		slog.Warn("API_KEY is not set — HTTP API will run without authentication")
 	}
 
+	// Read admin key from environment
+	adminKey := os.Getenv("ADMIN_KEY")
+	if adminKey == "" {
+		slog.Warn("ADMIN_KEY is not set — admin endpoints will run without extra authentication")
+	}
+
 	// Read allowed CORS origins from environment
 	var allowedOrigins []string
 	for _, o := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
@@ -139,7 +145,7 @@ func main() {
 	}
 
 	// Start HTTP API server
-	shutdownAPI, err := mesh.StartAPIServer(meshServer, *apiPort, apiKey, allowedOrigins)
+	shutdownAPI, err := mesh.StartAPIServer(meshServer, *apiPort, apiKey, adminKey, allowedOrigins)
 	if err != nil {
 		slog.Error("Failed to start API server", "error", err)
 		os.Exit(1)

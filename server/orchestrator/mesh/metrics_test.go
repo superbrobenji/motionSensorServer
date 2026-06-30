@@ -128,7 +128,7 @@ func TestSetSerialConnected_UpdatesGauge(t *testing.T) {
 // is accessible without authentication even when an API key is set.
 func TestMetricsEndpoint_ExemptFromAuth(t *testing.T) {
 	ms := newTestMeshServer(t)
-	api := NewAPIServer(ms, "secret-key", nil)
+	api := NewAPIServer(ms, "secret-key", "", nil)
 
 	req := httptest.NewRequest("GET", "/metrics", nil)
 	// No Authorization header
@@ -144,7 +144,7 @@ func TestMetricsEndpoint_ExemptFromAuth(t *testing.T) {
 // middleware still applies to non-metrics routes when an API key is set.
 func TestMetricsEndpoint_AuthStillProtectsOtherRoutes(t *testing.T) {
 	ms := newTestMeshServer(t)
-	api := NewAPIServer(ms, "secret-key", nil)
+	api := NewAPIServer(ms, "secret-key", "", nil)
 
 	req := httptest.NewRequest("GET", "/status", nil)
 	// No Authorization header

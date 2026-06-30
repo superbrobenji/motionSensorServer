@@ -180,7 +180,7 @@ func TestV1NodeCommand_ReturnsCommandId(t *testing.T) {
 	ms.nodeRegistry.AssignNode(mac, 1, "led-node", "stage")
 	ms.nodeRegistry.UpdateNode(mac, AdapterTypeLED, 0, 1)
 
-	api := NewAPIServer(ms, "", nil)
+	api := NewAPIServer(ms, "", "", nil)
 	req := httptest.NewRequest("POST", "/api/v1/nodes/1/command", strings.NewReader(`{"action":"led_off"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
@@ -218,7 +218,7 @@ func TestV1GetCommandStatus_PendingAndAcked(t *testing.T) {
 		Status: CommandStatusPending,
 	})
 
-	api := NewAPIServer(ms, "", nil)
+	api := NewAPIServer(ms, "", "", nil)
 	req := httptest.NewRequest("GET", "/api/v1/nodes/2/command/"+cmdID, nil)
 	rr := httptest.NewRecorder()
 	api.ServeHTTP(rr, req)
@@ -243,7 +243,7 @@ func TestV1GetCommandStatus_PendingAndAcked(t *testing.T) {
 
 func TestV1GetCommandStatus_NotFound(t *testing.T) {
 	ms := newTestMeshServer(t)
-	api := NewAPIServer(ms, "", nil)
+	api := NewAPIServer(ms, "", "", nil)
 	req := httptest.NewRequest("GET", "/api/v1/nodes/1/command/no-such-id", nil)
 	rr := httptest.NewRecorder()
 	api.ServeHTTP(rr, req)

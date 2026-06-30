@@ -11,7 +11,7 @@ import (
 func newV1TestServer(t *testing.T) (*APIServer, *MeshServer) {
 	t.Helper()
 	ms := newTestMeshServer(t)
-	api := NewAPIServer(ms, "test-key", nil)
+	api := NewAPIServer(ms, "test-key", "", nil)
 	return api, ms
 }
 

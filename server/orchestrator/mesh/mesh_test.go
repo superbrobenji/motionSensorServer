@@ -907,7 +907,7 @@ func TestV1GetPendingEnrollments_ResponseFormat(t *testing.T) {
 		t.Fatalf("AddPending: %v", err)
 	}
 
-	api := NewAPIServer(ms, "", nil)
+	api := NewAPIServer(ms, "", "", nil)
 	req := httptest.NewRequest("GET", "/api/v1/enrollments/pending", nil)
 	rr := httptest.NewRecorder()
 	api.ServeHTTP(rr, req)
@@ -999,7 +999,7 @@ func TestV1NodeCommand_LEDSolid_OutputNode(t *testing.T) {
 	ms.nodeRegistry.AssignNode(mac, 1, "led-node", "stage")
 	ms.nodeRegistry.UpdateNode(mac, AdapterTypeLED, 0, 1)
 
-	apiServer := NewAPIServer(ms, "", nil)
+	apiServer := NewAPIServer(ms, "", "", nil)
 	body := strings.NewReader(`{"action":"led_solid","colour":[255,0,128]}`)
 	req := httptest.NewRequest("POST", "/api/v1/nodes/1/command", body)
 	rr := httptest.NewRecorder()
@@ -1104,7 +1104,7 @@ func TestV1NodeCommand_RejectsInputAdapter(t *testing.T) {
 	ms.nodeRegistry.AssignNode(mac, 1, "pir-node", "stage")
 	ms.nodeRegistry.UpdateNode(mac, AdapterTypePIR, 0, 1)
 
-	apiServer := NewAPIServer(ms, "", nil)
+	apiServer := NewAPIServer(ms, "", "", nil)
 	body := strings.NewReader(`{"action":"led_solid","colour":[255,0,0]}`)
 	req := httptest.NewRequest("POST", "/api/v1/nodes/1/command", body)
 	rr := httptest.NewRecorder()
@@ -1112,5 +1112,23 @@ func TestV1NodeCommand_RejectsInputAdapter(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 (PIR is input — no commands)", rr.Code)
+	}
+}
+
+func TestAdminRoute_Requires_ADMIN_KEY(t *testing.T) {
+	// This test verifies that the admin key middleware rejects requests
+	// with a wrong key on enrollment reject (an admin-only route).
+	ms := newTestMeshServer(t)
+	mac := [6]byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	_ = ms.authRegistry.AddPending(mac, [32]byte{})
+
+	apiServer := NewAPIServer(ms, "", "test-admin-key", nil)
+	req := httptest.NewRequest("POST", "/api/v1/enrollments/aa:bb:cc:dd:ee:ff/reject", nil)
+	req.Header.Set("Authorization", "Bearer wrong-key")
+	rr := httptest.NewRecorder()
+	apiServer.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 (wrong admin key)", rr.Code)
 	}
 }

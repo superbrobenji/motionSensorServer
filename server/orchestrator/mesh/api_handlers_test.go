@@ -13,7 +13,7 @@ import (
 func newTestAPIServer(t *testing.T) *APIServer {
 	t.Helper()
 	ms := newTestMeshServer(t)
-	return NewAPIServer(ms, "", nil)
+	return NewAPIServer(ms, "", "", nil)
 }
 
 func TestGetStatus(t *testing.T) {
@@ -78,7 +78,7 @@ func TestConfigureNode_InvalidAdapterType(t *testing.T) {
 
 func TestAuthMiddleware_ProtectsRoutes(t *testing.T) {
 	ms := newTestMeshServer(t)
-	api := NewAPIServer(ms, "test-key", nil)
+	api := NewAPIServer(ms, "test-key", "", nil)
 
 	req := httptest.NewRequest("GET", "/status", nil)
 	w := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestGetHealth(t *testing.T) {
 func TestGetHealth_NoAuthRequired(t *testing.T) {
 	// Server with auth key set — /health must still return 200
 	ms := newTestMeshServer(t)
-	api := NewAPIServer(ms, "test-key", nil)
+	api := NewAPIServer(ms, "test-key", "", nil)
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	// Deliberately no Authorization header

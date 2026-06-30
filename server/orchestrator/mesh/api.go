@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -26,14 +27,16 @@ type APIServer struct {
 	meshServer *MeshServer
 	router     *mux.Router
 	apiKey     string
+	adminKey   string
 }
 
 // NewAPIServer creates a new API server
-func NewAPIServer(meshServer *MeshServer, apiKey string, allowedOrigins []string) *APIServer {
+func NewAPIServer(meshServer *MeshServer, apiKey string, adminKey string, allowedOrigins []string) *APIServer {
 	api := &APIServer{
 		meshServer: meshServer,
 		router:     mux.NewRouter(),
 		apiKey:     apiKey,
+		adminKey:   adminKey,
 	}
 	if len(allowedOrigins) > 0 {
 		api.router.Use(CORSMiddleware(allowedOrigins))
@@ -96,20 +99,37 @@ func (api *APIServer) setupRoutes() {
 	sub.Handle("/api/v1/zones", InstrumentHandler("/api/v1/zones", http.HandlerFunc(api.v1GetZones))).Methods("GET")
 	sub.Handle("/api/v1/zones", InstrumentHandler("/api/v1/zones", http.HandlerFunc(api.v1CreateZone))).Methods("POST")
 	sub.Handle("/api/v1/zones/{id}", InstrumentHandler("/api/v1/zones/{id}", http.HandlerFunc(api.v1UpdateZone))).Methods("PATCH")
-	sub.Handle("/api/v1/zones/{id}", InstrumentHandler("/api/v1/zones/{id}", http.HandlerFunc(api.v1DeleteZone))).Methods("DELETE")
 	sub.Handle("/api/v1/zones/{id}/command", InstrumentHandler("/api/v1/zones/{id}/command", http.HandlerFunc(api.v1ZoneCommand))).Methods("POST")
 
-	// /api/v1/nodes (write operations remain auth-required)
+	// /api/v1/nodes (write operations remain auth-required; DELETE moved to admin subrouter)
 	sub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1UpdateNode))).Methods("PATCH")
-	sub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1DeleteNode))).Methods("DELETE")
 	sub.Handle("/api/v1/nodes/{id}/command", InstrumentHandler("/api/v1/nodes/{id}/command", http.HandlerFunc(api.v1NodeCommand))).Methods("POST")
 	sub.Handle("/api/v1/nodes/{id}/command/{commandId}", InstrumentHandler("/api/v1/nodes/{id}/command/{commandId}", http.HandlerFunc(api.v1GetCommandStatus))).Methods("GET")
 
-	// /api/v1/enrollments
+	// /api/v1/enrollments (read operations)
 	sub.Handle("/api/v1/enrollments/pending", InstrumentHandler("/api/v1/enrollments/pending", http.HandlerFunc(api.v1GetPendingEnrollments))).Methods("GET")
 	sub.Handle("/api/v1/enrollments", InstrumentHandler("/api/v1/enrollments", http.HandlerFunc(api.v1GetAllEnrollments))).Methods("GET")
-	sub.Handle("/api/v1/enrollments/{mac}/approve", InstrumentHandler("/api/v1/enrollments/{mac}/approve", http.HandlerFunc(api.v1ApproveEnrollment))).Methods("POST")
-	sub.Handle("/api/v1/enrollments/{mac}/reject", InstrumentHandler("/api/v1/enrollments/{mac}/reject", http.HandlerFunc(api.v1RejectEnrollment))).Methods("POST")
+
+	// Admin routes — require ADMIN_KEY in addition to API_KEY
+	// These are the most sensitive operations: enrollment decisions and hard deletes.
+	admin := sub.PathPrefix("").Subrouter()
+	if api.adminKey != "" {
+		admin.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				bearer := r.Header.Get("Authorization")
+				token := strings.TrimPrefix(bearer, "Bearer ")
+				if token != api.adminKey {
+					api.writeError(w, http.StatusUnauthorized, "admin key required")
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		})
+	}
+	admin.Handle("/api/v1/enrollments/{mac}/approve", InstrumentHandler("/api/v1/enrollments/{mac}/approve", http.HandlerFunc(api.v1ApproveEnrollment))).Methods("POST")
+	admin.Handle("/api/v1/enrollments/{mac}/reject", InstrumentHandler("/api/v1/enrollments/{mac}/reject", http.HandlerFunc(api.v1RejectEnrollment))).Methods("POST")
+	admin.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1DeleteNode))).Methods("DELETE")
+	admin.Handle("/api/v1/zones/{id}", InstrumentHandler("/api/v1/zones/{id}", http.HandlerFunc(api.v1DeleteZone))).Methods("DELETE")
 }
 
 // ServeHTTP implements the http.Handler interface
@@ -466,8 +486,8 @@ func (api *APIServer) handleSetTxPower(w http.ResponseWriter, r *http.Request) {
 }
 
 // StartAPIServer starts the HTTP API server and returns a shutdown function.
-func StartAPIServer(meshServer *MeshServer, port int, apiKey string, corsOrigins []string) (shutdown func(context.Context) error, err error) {
-	api := NewAPIServer(meshServer, apiKey, corsOrigins)
+func StartAPIServer(meshServer *MeshServer, port int, apiKey string, adminKey string, corsOrigins []string) (shutdown func(context.Context) error, err error) {
+	api := NewAPIServer(meshServer, apiKey, adminKey, corsOrigins)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
