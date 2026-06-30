@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"context"
 	"testing"
 	"time"
 )
@@ -47,6 +48,82 @@ func (m *MockSerialPort) GetWrittenDataFrom(offset int) []byte {
 		return nil
 	}
 	return all[offset:]
+}
+
+// blockingEventStore is an EventStoreInterface that pauses WriteMessage until
+// released. This lets tests inject a controlled pause inside SendMessage (which
+// calls logMessageToKafka → WriteMessage while holding ms.mu.RLock), so that a
+// concurrent write-lock attempt is guaranteed to be pending before the code
+// reaches activeOutboundComm().
+type blockingEventStore struct {
+	ready   chan struct{} // closed when WriteMessage is entered
+	release chan struct{} // closed to allow WriteMessage to return
+}
+
+func newBlockingEventStore() *blockingEventStore {
+	return &blockingEventStore{
+		ready:   make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (b *blockingEventStore) Connect() error { return nil }
+func (b *blockingEventStore) Close() error   { return nil }
+func (b *blockingEventStore) SubscribeToEvents(_ context.Context, _ string) error { return nil }
+func (b *blockingEventStore) WriteMessage(_ string, _ string) error {
+	close(b.ready)   // signal: we are inside WriteMessage (RLock is held)
+	<-b.release      // wait until test says to continue
+	return nil
+}
+
+func TestSendMessage_NoDeadlockWithConcurrentStop(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mockPort := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(mockPort)
+
+	// Replace the event store with one that blocks inside WriteMessage,
+	// giving us a deterministic pause while ms.mu.RLock is held.
+	blocking := newBlockingEventStore()
+	ms.eventStore = blocking
+
+	// Set running=true directly (same package) to avoid opening a real serial port.
+	ms.running = true
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		msg := &MeshMessage{MessageType: 1}
+		_ = ms.SendMessage(msg)
+	}()
+
+	// Wait until SendMessage has acquired RLock and is blocked inside WriteMessage.
+	<-blocking.ready
+
+	// Now queue a write lock — this becomes pending while RLock is held.
+	// With the bug (activeOutboundComm calls RLock again), the sequence is:
+	//   1. RLock held by SendMessage
+	//   2. Lock() pending (below)
+	//   3. activeOutboundComm() tries RLock → blocks → deadlock
+	writeLockDone := make(chan struct{})
+	go func() {
+		defer close(writeLockDone)
+		ms.mu.Lock()
+		ms.mu.Unlock()
+	}()
+
+	// Give the write-lock goroutine time to become pending.
+	time.Sleep(2 * time.Millisecond)
+
+	// Unblock WriteMessage — SendMessage will now proceed to activeOutboundComm().
+	close(blocking.release)
+
+	select {
+	case <-done:
+		// pass — no deadlock
+	case <-time.After(2 * time.Second):
+		t.Fatal("deadlock: SendMessage blocked after Stop()")
+	}
+	<-writeLockDone
 }
 
 func TestMessageBuilder(t *testing.T) {

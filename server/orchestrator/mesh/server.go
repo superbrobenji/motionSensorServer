@@ -260,6 +260,23 @@ func (ms *MeshServer) activeOutboundComm() *SerialComm {
 	return ms.serialComm
 }
 
+// activeOutboundCommLocked returns the SerialComm to use for outgoing frames.
+// Caller MUST already hold ms.mu.RLock — does not acquire any lock itself.
+func (ms *MeshServer) activeOutboundCommLocked() *SerialComm {
+	secondary := ms.secondarySerialComm
+	if secondary == nil {
+		return ms.serialComm
+	}
+	ms.frameTimeMu.Lock()
+	primaryAge := time.Since(ms.primaryLastFrameAt)
+	ms.frameTimeMu.Unlock()
+	const failoverThreshold = 75 * time.Second
+	if primaryAge > failoverThreshold {
+		return secondary
+	}
+	return ms.serialComm
+}
+
 // messageProcessor processes incoming messages from the serial port
 func (ms *MeshServer) messageProcessor(comm *SerialComm, label string) {
 	defer ms.wg.Done()
@@ -685,7 +702,7 @@ func (ms *MeshServer) SendMessage(msg *MeshMessage) error {
 		slog.Warn("Failed to log outgoing message to Kafka", "error", err)
 	}
 
-	if err := ms.activeOutboundComm().WriteFrame(msg); err != nil {
+	if err := ms.activeOutboundCommLocked().WriteFrame(msg); err != nil {
 		slog.Error("Failed to send message", "error", err)
 		return err
 	}
