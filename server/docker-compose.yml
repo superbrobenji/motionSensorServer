@@ -113,6 +113,21 @@ services:
       - kafka-net
     restart: unless-stopped
 
+  sidecar:
+    build: ./sidecar
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "9000:9000"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - ADMIN_KEY=${ADMIN_KEY:?ADMIN_KEY is required}
+      - KAFKA_BROKER=kafka:9092
+    networks:
+      - kafka-net
+    restart: unless-stopped
+
 networks:
   kafka-net:
     driver: bridge
