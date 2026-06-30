@@ -19,6 +19,7 @@ func main() {
 	groupId := envOrDefault("KAFKA_GROUP_ID", "1")
 	authRegistryPath := envOrDefault("AUTH_REGISTRY_PATH", "data/nodeauth.json")
 	nodeRegistryPath := envOrDefault("NODE_REGISTRY_PATH", "data/nodes.json")
+	zoneRegistryPath := envOrDefault("ZONE_REGISTRY_PATH", "data/zones.json")
 	logLevel := envOrDefault("LOG_LEVEL", "INFO")
 
 	// Configure slog before anything else
@@ -95,10 +96,11 @@ func main() {
 			return ""
 		}(),
 		BaudRate:         *baudRate,
-		HealthTimeout:    30 * time.Second,
+		HealthTimeout:    75 * time.Second,
 		EventStore:       eventStore,
 		AuthRegistryPath: *authRegistry,
 		NodeRegistryPath: *nodeRegistry,
+		ZoneRegistryPath: zoneRegistryPath,
 	}
 
 	meshServer := mesh.NewMeshServer(meshConfig)

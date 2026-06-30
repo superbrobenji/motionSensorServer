@@ -44,8 +44,12 @@ func NewAPIServer(meshServer *MeshServer, apiKey string, allowedOrigins []string
 
 // setupRoutes configures the HTTP routes
 func (api *APIServer) setupRoutes() {
-	// Metrics endpoint — no auth (Prometheus scrapers don't send Bearer tokens)
+	// Public endpoints — no auth required
+	// /metrics: Prometheus scrapers don't send Bearer tokens
 	api.router.Handle("/metrics", MetricsHandler())
+	// /health: used by Docker Compose and Dockerfile HEALTHCHECK; must not require auth
+	// so the container is marked healthy before any dependent services start.
+	api.router.HandleFunc("/health", api.getHealth).Methods("GET")
 
 	// All other routes — wrapped with auth when an API key is configured
 	sub := api.router.PathPrefix("").Subrouter()
@@ -277,6 +281,16 @@ func (api *APIServer) getStatus(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data:    status,
 	})
+}
+
+// getHealth is an unauthenticated liveness probe used by Docker healthchecks.
+// It returns 200 + {"ok":true} as long as the HTTP server is reachable.
+// Intentionally kept trivial — it must not depend on mesh state so it never
+// blocks the container from being marked healthy.
+func (api *APIServer) getHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"ok":true}` + "\n"))
 }
 
 // broadcastData broadcasts data to all nodes

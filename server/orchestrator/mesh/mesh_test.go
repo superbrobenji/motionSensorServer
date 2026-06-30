@@ -2,6 +2,12 @@ package mesh
 
 import (
 	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -47,6 +53,83 @@ func (m *MockSerialPort) GetWrittenDataFrom(offset int) []byte {
 		return nil
 	}
 	return all[offset:]
+}
+
+// blockingEventStore is an EventStoreInterface that pauses WriteMessage until
+// released. This lets tests inject a controlled pause inside SendMessage (which
+// calls logMessageToKafka → WriteMessage while holding ms.mu.RLock), so that a
+// concurrent write-lock attempt is guaranteed to be pending before the code
+// reaches activeOutboundComm().
+type blockingEventStore struct {
+	ready   chan struct{} // closed when WriteMessage is entered
+	release chan struct{} // closed to allow WriteMessage to return
+}
+
+func newBlockingEventStore() *blockingEventStore {
+	return &blockingEventStore{
+		ready:   make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (b *blockingEventStore) Connect() error { return nil }
+func (b *blockingEventStore) Close() error   { return nil }
+func (b *blockingEventStore) SubscribeToEvents(_ context.Context, _ string) error { return nil }
+func (b *blockingEventStore) WriteMessage(_ string, _ string) error {
+	close(b.ready)   // signal: we are inside WriteMessage (RLock is held)
+	<-b.release      // wait until test says to continue
+	return nil
+}
+
+func TestSendMessage_NoDeadlockWithConcurrentStop(t *testing.T) {
+	ms := newTestMeshServer(t)
+	mockPort := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(mockPort)
+
+	// Replace the event store with one that blocks inside WriteMessage,
+	// giving us a deterministic pause while ms.mu.RLock is held.
+	blocking := newBlockingEventStore()
+	ms.eventStore = blocking
+
+	// Set running=true directly (same package) to avoid opening a real serial port.
+	ms.running = true
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		msg := &MeshMessage{MessageType: 1}
+		_ = ms.SendMessage(msg)
+	}()
+
+	// Wait until SendMessage has acquired RLock and is blocked inside WriteMessage.
+	<-blocking.ready
+
+	// Now queue a write lock — this becomes pending while RLock is held.
+	// With the bug (activeOutboundComm calls RLock again), the sequence is:
+	//   1. RLock held by SendMessage
+	//   2. Lock() pending (below)
+	//   3. activeOutboundComm() tries RLock → blocks → deadlock
+	writeLockDone := make(chan struct{})
+	go func() {
+		defer close(writeLockDone)
+		ms.mu.Lock()
+		runtime.Gosched() // yield while holding write lock — simulates Stop() contention
+		ms.mu.Unlock()
+	}()
+
+	// Give the write-lock goroutine time to become pending.
+	time.Sleep(2 * time.Millisecond)
+
+	// Unblock WriteMessage — SendMessage will now proceed to activeOutboundComm().
+	close(blocking.release)
+
+	select {
+	case <-done:
+		// pass — no deadlock
+	case <-time.After(2 * time.Second):
+		t.Fatal("deadlock: SendMessage blocked after Stop()")
+	}
+	<-writeLockDone
 }
 
 func TestMessageBuilder(t *testing.T) {
@@ -732,6 +815,41 @@ func TestAdapterTypeTranslation(t *testing.T) {
 	}
 }
 
+func TestMeshServer_ZoneRegistry_PersistAndLoad(t *testing.T) {
+	dir := t.TempDir()
+	zonePath := filepath.Join(dir, "zones.json")
+
+	// First server: create and stop (persists zones)
+	cfg1 := MeshServerConfig{
+		HealthTimeout:    75 * time.Second,
+		ZoneRegistryPath: zonePath,
+	}
+	ms1 := NewMeshServer(cfg1)
+	zone, err := ms1.GetZoneRegistry().Add("stage")
+	if err != nil {
+		t.Fatalf("Add zone: %v", err)
+	}
+	// Set running=true so Stop() proceeds past the guard and calls zoneRegistry.Persist.
+	ms1.running = true
+	if err := ms1.Stop(); err != nil {
+		t.Logf("Stop ms1: %v", err)
+	}
+
+	// Second server: load from same path
+	cfg2 := MeshServerConfig{
+		HealthTimeout:    75 * time.Second,
+		ZoneRegistryPath: zonePath,
+	}
+	ms2 := NewMeshServer(cfg2)
+	loaded, ok := ms2.GetZoneRegistry().Get(zone.ID)
+	if !ok {
+		t.Fatal("zone not found after reload")
+	}
+	if loaded.Name != "stage" {
+		t.Errorf("zone name = %q, want %q", loaded.Name, "stage")
+	}
+}
+
 func TestHandlePIRData_KafkaWriteError(t *testing.T) {
 	mockStore := NewMockEventStore()
 	registry := NewNodeRegistry()
@@ -755,5 +873,24 @@ func TestHandlePIRData_KafkaWriteError(t *testing.T) {
 
 	if len(mockStore.GetMessages()) != 1 {
 		t.Errorf("expected 1 Kafka message written, got %d", len(mockStore.GetMessages()))
+	}
+}
+
+func TestCORSMiddleware_AllowsPatchAndDelete(t *testing.T) {
+	handler := CORSMiddleware([]string{"http://localhost:3000"})(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+	)
+
+	for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+		req := httptest.NewRequest(http.MethodOptions, "/", nil)
+		req.Header.Set("Origin", "http://localhost:3000")
+		req.Header.Set("Access-Control-Request-Method", method)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		allowed := rr.Header().Get("Access-Control-Allow-Methods")
+		if !strings.Contains(allowed, method) {
+			t.Errorf("preflight for %s: Allow-Methods = %q, want to contain %q", method, allowed, method)
+		}
 	}
 }

@@ -85,6 +85,7 @@ type MeshServerConfig struct {
 	EventStore       EventStore.EventStoreInterface
 	AuthRegistryPath string // e.g. "data/nodeauth.json"
 	NodeRegistryPath string // e.g. "data/nodes.json"
+	ZoneRegistryPath string // e.g. "data/zones.json"
 }
 
 // NewMeshServer creates a new mesh server
@@ -105,6 +106,13 @@ func NewMeshServer(config MeshServerConfig) *MeshServer {
 		}
 	}
 
+	zoneRegistry := NewZoneRegistry()
+	if config.ZoneRegistryPath != "" {
+		if err := zoneRegistry.Load(config.ZoneRegistryPath); err != nil {
+			slog.Warn("Failed to load zone registry", "error", err)
+		}
+	}
+
 	return &MeshServer{
 		nodeRegistry:     nodeRegistry,
 		messageBuilder:   NewMessageBuilder(),
@@ -121,7 +129,8 @@ func NewMeshServer(config MeshServerConfig) *MeshServer {
 		healthTimeout:    config.HealthTimeout,
 		eventBroker:      NewEventBroker(),
 		nodeOnlineState:  make(map[string]bool),
-		zoneRegistry:     NewZoneRegistry(),
+		zoneRegistry:     zoneRegistry,
+		zoneRegistryPath: config.ZoneRegistryPath,
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -247,6 +256,23 @@ func (ms *MeshServer) activeOutboundComm() *SerialComm {
 	ms.mu.RLock()
 	secondary := ms.secondarySerialComm
 	ms.mu.RUnlock()
+	if secondary == nil {
+		return ms.serialComm
+	}
+	ms.frameTimeMu.Lock()
+	primaryAge := time.Since(ms.primaryLastFrameAt)
+	ms.frameTimeMu.Unlock()
+	const failoverThreshold = 75 * time.Second
+	if primaryAge > failoverThreshold {
+		return secondary
+	}
+	return ms.serialComm
+}
+
+// activeOutboundCommLocked returns the SerialComm to use for outgoing frames.
+// Caller MUST already hold ms.mu.RLock — does not acquire any lock itself.
+func (ms *MeshServer) activeOutboundCommLocked() *SerialComm {
+	secondary := ms.secondarySerialComm
 	if secondary == nil {
 		return ms.serialComm
 	}
@@ -685,7 +711,7 @@ func (ms *MeshServer) SendMessage(msg *MeshMessage) error {
 		slog.Warn("Failed to log outgoing message to Kafka", "error", err)
 	}
 
-	if err := ms.activeOutboundComm().WriteFrame(msg); err != nil {
+	if err := ms.activeOutboundCommLocked().WriteFrame(msg); err != nil {
 		slog.Error("Failed to send message", "error", err)
 		return err
 	}

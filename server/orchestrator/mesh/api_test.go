@@ -17,7 +17,7 @@ func newTestMeshServer(t *testing.T) *MeshServer {
 	cfg := MeshServerConfig{
 		SerialPort:       "",
 		BaudRate:         115200,
-		HealthTimeout:    30 * time.Second,
+		HealthTimeout:    75 * time.Second,
 		EventStore:       NewMockEventStore(),
 		AuthRegistryPath: "",
 		NodeRegistryPath: "",
