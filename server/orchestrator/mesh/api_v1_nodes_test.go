@@ -133,7 +133,7 @@ func TestV1Nodes_Hotswap_OldNodeExcludedNewNodePresent(t *testing.T) {
 	}
 
 	// Approve hotswap via API
-	w := v1Request(t, api, "POST", "/api/v1/enrollments/112233445566/approve",
+	w := v1Request(t, api, "POST", "/api/v1/enrollments/11:22:33:44:55:66/approve",
 		map[string]interface{}{"nodeId": 7})
 	if w.Code != http.StatusOK {
 		t.Fatalf("approve returned %d, want 200", w.Code)

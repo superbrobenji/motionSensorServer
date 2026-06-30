@@ -56,6 +56,10 @@ func (r *Registry) AddPending(mac [6]byte, pubKey [32]byte) error {
 func (r *Registry) Approve(macStr string) (*NodeAuth, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// Normalize to canonical colon-separated form so callers may pass either format.
+	if mac, err := ParseMAC(macStr); err == nil {
+		macStr = macToString(mac)
+	}
 	node, ok := r.nodes[macStr]
 	if !ok {
 		return nil, fmt.Errorf("node %s not found", macStr)
@@ -68,6 +72,10 @@ func (r *Registry) Approve(macStr string) (*NodeAuth, error) {
 func (r *Registry) Reject(macStr string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// Normalize to canonical colon-separated form so callers may pass either format.
+	if mac, err := ParseMAC(macStr); err == nil {
+		macStr = macToString(mac)
+	}
 	node, ok := r.nodes[macStr]
 	if !ok {
 		return fmt.Errorf("node %s not found", macStr)
@@ -118,13 +126,21 @@ func (r *Registry) GetApprovedPublicKey(mac [6]byte) ([32]byte, bool) {
 }
 
 func macToString(mac [6]byte) string {
-	return hex.EncodeToString(mac[:])
+	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5])
 }
 
 func ParseMAC(s string) ([6]byte, error) {
 	var mac [6]byte
-	b, err := hex.DecodeString(s)
-	if err != nil || len(b) != 6 {
+	// Try colon-separated format first
+	n, err := fmt.Sscanf(s, "%02x:%02x:%02x:%02x:%02x:%02x",
+		&mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5])
+	if err == nil && n == 6 {
+		return mac, nil
+	}
+	// Fall back to bare hex (for backward compatibility with existing persisted data)
+	b, hexErr := hex.DecodeString(s)
+	if hexErr != nil || len(b) != 6 {
 		return mac, fmt.Errorf("invalid MAC: %s", s)
 	}
 	copy(mac[:], b)

@@ -913,9 +913,9 @@ func TestV1GetPendingEnrollments_ResponseFormat(t *testing.T) {
 	}
 	entry := resp.Data[0]
 
-	// MAC must be hex string (12 chars), NOT base64
-	if len(entry.MAC) != 12 {
-		t.Errorf("MAC = %q (len %d), want 12-char hex like aabbccddeeff", entry.MAC, len(entry.MAC))
+	// MAC must be colon-separated hex (17 chars), NOT base64
+	if len(entry.MAC) != 17 {
+		t.Errorf("MAC = %q (len %d), want 17-char colon-separated hex like aa:bb:cc:dd:ee:ff", entry.MAC, len(entry.MAC))
 	}
 	// PublicKey must be hex string (64 chars), NOT base64
 	if len(entry.PublicKey) != 64 {
