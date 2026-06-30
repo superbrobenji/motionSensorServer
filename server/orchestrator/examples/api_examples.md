@@ -118,7 +118,7 @@ curl -X POST http://localhost:8080/api/v1/zones/stage-id/command \
 ### List pending enrollments
 ```bash
 curl http://localhost:8080/api/v1/enrollments/pending \
-  -H "Authorization: Bearer $ADMIN_KEY"
+  -H "Authorization: Bearer $API_KEY"
 ```
 
 Response:
