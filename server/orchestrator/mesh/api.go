@@ -103,6 +103,7 @@ func (api *APIServer) setupRoutes() {
 	sub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1UpdateNode))).Methods("PATCH")
 	sub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1DeleteNode))).Methods("DELETE")
 	sub.Handle("/api/v1/nodes/{id}/command", InstrumentHandler("/api/v1/nodes/{id}/command", http.HandlerFunc(api.v1NodeCommand))).Methods("POST")
+	sub.Handle("/api/v1/nodes/{id}/command/{commandId}", InstrumentHandler("/api/v1/nodes/{id}/command/{commandId}", http.HandlerFunc(api.v1GetCommandStatus))).Methods("GET")
 
 	// /api/v1/enrollments
 	sub.Handle("/api/v1/enrollments/pending", InstrumentHandler("/api/v1/enrollments/pending", http.HandlerFunc(api.v1GetPendingEnrollments))).Methods("GET")

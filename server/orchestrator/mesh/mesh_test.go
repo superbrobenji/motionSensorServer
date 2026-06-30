@@ -1010,6 +1010,94 @@ func TestV1NodeCommand_LEDSolid_OutputNode(t *testing.T) {
 	}
 }
 
+func TestHandleCommandAck_PublishesSSEEvent(t *testing.T) {
+	ms := newTestMeshServer(t)
+
+	// Pre-populate a pending command with a known UUID.
+	// UUID bytes are parsed as raw hex; bytes 14 and 15 of
+	// "00000000-0000-0000-0000-0000aabb0102" are 0x01 and 0x02.
+	knownUUID := "00000000-0000-0000-0000-0000aabb0102"
+	ms.commandStore.Add(&PendingCommand{
+		ID:     knownUUID,
+		NodeID: 3,
+		Action: "led_off",
+		SentAt: time.Now(),
+		Status: CommandStatusPending,
+	})
+
+	// Subscribe before sending the ack frame.
+	ch := ms.eventBroker.Subscribe()
+	defer ms.eventBroker.Unsubscribe(ch)
+
+	// Simulate OP_COMMAND_ACK frame: opcode + 2-byte token.
+	ackMsg := &MeshMessage{
+		Data: []byte{OpCommandAck, 0x01, 0x02},
+	}
+	ms.handleCommandAck(ackMsg)
+
+	select {
+	case e := <-ch:
+		if e.Type != EventCommandAck {
+			t.Fatalf("event type = %q, want %q", e.Type, EventCommandAck)
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(e.Data, &payload); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if payload["commandId"] != knownUUID {
+			t.Errorf("commandId = %v, want %v", payload["commandId"], knownUUID)
+		}
+		if payload["status"] != "ok" {
+			t.Errorf("status = %v, want ok", payload["status"])
+		}
+		if payload["nodeId"] != float64(3) {
+			t.Errorf("nodeId = %v, want 3", payload["nodeId"])
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout: command_ack SSE event not published")
+	}
+}
+
+func TestHandleCommandAck_FrameTooShort_NoPublish(t *testing.T) {
+	ms := newTestMeshServer(t)
+
+	ch := ms.eventBroker.Subscribe()
+	defer ms.eventBroker.Unsubscribe(ch)
+
+	// Frame with only opcode byte — too short to carry a token.
+	ackMsg := &MeshMessage{
+		Data: []byte{OpCommandAck},
+	}
+	ms.handleCommandAck(ackMsg)
+
+	select {
+	case <-ch:
+		t.Fatal("expected no event for too-short frame")
+	case <-time.After(100 * time.Millisecond):
+		// pass
+	}
+}
+
+func TestHandleCommandAck_UnknownToken_NoPublish(t *testing.T) {
+	ms := newTestMeshServer(t)
+
+	ch := ms.eventBroker.Subscribe()
+	defer ms.eventBroker.Unsubscribe(ch)
+
+	// Token bytes that match no pending command.
+	ackMsg := &MeshMessage{
+		Data: []byte{OpCommandAck, 0xDE, 0xAD},
+	}
+	ms.handleCommandAck(ackMsg)
+
+	select {
+	case <-ch:
+		t.Fatal("expected no event for unknown token")
+	case <-time.After(100 * time.Millisecond):
+		// pass
+	}
+}
+
 func TestV1NodeCommand_RejectsInputAdapter(t *testing.T) {
 	ms := newTestMeshServer(t)
 	mac := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}

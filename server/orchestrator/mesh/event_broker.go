@@ -15,6 +15,7 @@ const (
 	EventNodeOffline EventType = "node_offline"
 	EventEnrolled    EventType = "enrolled"
 	EventHealth      EventType = "health"
+	EventCommandAck  EventType = "command_ack"
 )
 
 // Event is a single SSE message sent to subscribers.
