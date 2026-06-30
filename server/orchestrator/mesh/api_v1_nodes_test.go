@@ -104,13 +104,16 @@ func TestV1Nodes_Delete_RemovesNode(t *testing.T) {
 	}
 }
 
-func TestV1Nodes_Command_UnsupportedAction_Returns501(t *testing.T) {
+func TestV1Nodes_Command_UnknownAction_Returns400(t *testing.T) {
 	api, ms := newV1TestServer(t)
-	setupNodeForV1Test(t, ms)
+	// Use an LED node so the adapter-type check passes and we reach the action switch.
+	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	ms.nodeRegistry.AssignNode(mac, 7, "entrance-left", "lobby")
+	ms.nodeRegistry.UpdateNode(mac, AdapterTypeLED, 3600, 2)
 	w := v1Request(t, api, "POST", "/api/v1/nodes/7/command",
 		map[string]interface{}{"action": "explode", "params": map[string]interface{}{}})
-	if w.Code != http.StatusNotImplemented {
-		t.Errorf("got %d, want 501", w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", w.Code)
 	}
 }
 

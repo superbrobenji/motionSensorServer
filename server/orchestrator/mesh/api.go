@@ -15,7 +15,7 @@ const maxRequestBodyBytes = 64 * 1024 // 64KB
 
 func isValidAdapterType(t int32) bool {
 	switch t {
-	case AdapterTypeUnknown, AdapterTypePIR, AdapterTypeWIFI, AdapterTypeLED, AdapterTypeSerial:
+	case AdapterTypeUnknown, AdapterTypeSerial, AdapterTypePIR, AdapterTypeLED, AdapterTypeRelay, AdapterTypeWIFI:
 		return true
 	}
 	return false

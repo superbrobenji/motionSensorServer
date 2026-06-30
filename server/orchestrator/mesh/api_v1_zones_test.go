@@ -96,12 +96,12 @@ func TestV1Zones_Command_UnknownZone_Returns404(t *testing.T) {
 	}
 }
 
-func TestV1Zones_Command_UnsupportedAction_Returns501(t *testing.T) {
+func TestV1Zones_Command_UnknownAction_Returns400(t *testing.T) {
 	api, _ := newV1TestServer(t)
 	v1Request(t, api, "POST", "/api/v1/zones", map[string]string{"name": "lobby"})
 	w := v1Request(t, api, "POST", "/api/v1/zones/lobby/command",
 		map[string]interface{}{"action": "explode", "params": map[string]interface{}{}})
-	if w.Code != http.StatusNotImplemented {
-		t.Errorf("got %d, want 501", w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", w.Code)
 	}
 }

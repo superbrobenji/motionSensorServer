@@ -991,35 +991,38 @@ func TestIsMasterOnline_FalseAfterTimeout(t *testing.T) {
 	}
 }
 
-func TestV1NodeCommand_Returns501(t *testing.T) {
+func TestV1NodeCommand_LEDSolid_OutputNode(t *testing.T) {
 	ms := newTestMeshServer(t)
-	mac := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
-	ms.nodeRegistry.AssignNode(mac, 1, "test-node", "zone-a")
+	mockPort := NewMockSerialPort()
+	ms.serialComm = NewSerialComm(mockPort)
+	mac := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	ms.nodeRegistry.AssignNode(mac, 1, "led-node", "stage")
+	ms.nodeRegistry.UpdateNode(mac, AdapterTypeLED, 0, 1)
 
 	apiServer := NewAPIServer(ms, "", nil)
-	body := strings.NewReader(`{"action":"trigger"}`)
+	body := strings.NewReader(`{"action":"led_solid","colour":[255,0,128]}`)
 	req := httptest.NewRequest("POST", "/api/v1/nodes/1/command", body)
-	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	apiServer.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusNotImplemented {
-		t.Errorf("status = %d, want 501", rr.Code)
+	if rr.Code != http.StatusAccepted {
+		t.Errorf("status = %d, want 202", rr.Code)
 	}
 }
 
-func TestV1ZoneCommand_Returns501(t *testing.T) {
+func TestV1NodeCommand_RejectsInputAdapter(t *testing.T) {
 	ms := newTestMeshServer(t)
-	zone, _ := ms.GetZoneRegistry().Add("stage")
+	mac := []byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	ms.nodeRegistry.AssignNode(mac, 1, "pir-node", "stage")
+	ms.nodeRegistry.UpdateNode(mac, AdapterTypePIR, 0, 1)
 
 	apiServer := NewAPIServer(ms, "", nil)
-	body := strings.NewReader(`{"action":"trigger"}`)
-	req := httptest.NewRequest("POST", "/api/v1/zones/"+zone.ID+"/command", body)
-	req.Header.Set("Content-Type", "application/json")
+	body := strings.NewReader(`{"action":"led_solid","colour":[255,0,0]}`)
+	req := httptest.NewRequest("POST", "/api/v1/nodes/1/command", body)
 	rr := httptest.NewRecorder()
 	apiServer.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusNotImplemented {
-		t.Errorf("status = %d, want 501", rr.Code)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 (PIR is input — no commands)", rr.Code)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/superbrobenji/planetopia-protocol/opcodes"
 )
 
 func (api *APIServer) v1GetNodes(w http.ResponseWriter, r *http.Request) {
@@ -112,11 +113,61 @@ func (api *APIServer) v1NodeCommand(w http.ResponseWriter, r *http.Request) {
 		api.writeError(w, http.StatusBadRequest, "invalid node id")
 		return
 	}
-	if _, ok := api.meshServer.GetNodeRegistry().GetNodeByID(id); !ok {
+	node, ok := api.meshServer.GetNodeRegistry().GetNodeByID(id)
+	if !ok {
 		api.writeError(w, http.StatusNotFound, "node not found")
 		return
 	}
-	api.writeError(w, http.StatusNotImplemented, "node commands not yet implemented — pending shared protocol repo (Phase 3)")
+
+	var body struct {
+		Action string `json:"action"`
+		Colour []byte `json:"colour"` // [r, g, b] for led_solid
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Action == "" {
+		api.writeError(w, http.StatusBadRequest, "action is required")
+		return
+	}
+
+	// Validate: only output adapters accept commands
+	if !adapterIsOutput(node.AdapterType) {
+		api.writeError(w, http.StatusBadRequest, "node adapter type does not accept commands")
+		return
+	}
+
+	payload := make([]byte, MaxDataLength)
+	switch body.Action {
+	case "led_solid":
+		if len(body.Colour) != 3 {
+			api.writeError(w, http.StatusBadRequest, "led_solid requires colour [r,g,b]")
+			return
+		}
+		payload[0] = opcodes.OpLEDSolid
+		payload[1] = body.Colour[0]
+		payload[2] = body.Colour[1]
+		payload[3] = body.Colour[2]
+	case "led_off":
+		payload[0] = opcodes.OpLEDOff
+	case "relay_on":
+		payload[0] = opcodes.OpRelaySet
+		payload[1] = 0x01
+	case "relay_off":
+		payload[0] = opcodes.OpRelaySet
+		payload[1] = 0x00
+	default:
+		api.writeError(w, http.StatusBadRequest, "unknown action: "+body.Action)
+		return
+	}
+
+	if err := api.meshServer.SendNodeData(node.MAC, int32(AdapterTypeSerial), payload); err != nil {
+		api.writeError(w, http.StatusInternalServerError, "failed to send command")
+		return
+	}
+	api.writeJSON(w, http.StatusAccepted, APIResponse{Success: true, Message: "command sent"})
+}
+
+// adapterIsOutput returns true for adapter types that receive commands from the server.
+func adapterIsOutput(t int32) bool {
+	return t == AdapterTypeLED || t == AdapterTypeRelay
 }
 
 // parseNodeID converts a URL path segment to a uint8 node ID (1-255).

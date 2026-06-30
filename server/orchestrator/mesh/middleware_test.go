@@ -81,13 +81,14 @@ func TestCORSMiddleware_BlockedOrigin(t *testing.T) {
 }
 
 func TestIsValidAdapterType(t *testing.T) {
-	valid := []int32{-1, 0, 1, 2, 3}
+	// Valid types: 0=Unknown, 1=Serial, 2=PIR, 3=LED, 4=Relay, 5=WiFi(reserved)
+	valid := []int32{0, 1, 2, 3, 4, 5}
 	for _, v := range valid {
 		if !isValidAdapterType(v) {
 			t.Errorf("expected %d to be valid", v)
 		}
 	}
-	invalid := []int32{-2, 4, 99, -100}
+	invalid := []int32{-1, -2, 6, 99, -100}
 	for _, v := range invalid {
 		if isValidAdapterType(v) {
 			t.Errorf("expected %d to be invalid", v)

@@ -1,16 +1,17 @@
 module github.com/superbrobenji/motionServer
 
-go 1.23.0
-
-toolchain go1.24.4
+go 1.26.4
 
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/segmentio/kafka-go v0.4.48
+	github.com/superbrobenji/planetopia-protocol v0.0.0-00010101000000-000000000000
 	go.bug.st/serial v1.6.2
 	google.golang.org/protobuf v1.36.8
 )
+
+replace github.com/superbrobenji/planetopia-protocol => /Users/benjamin.swanepoel/projects/personal/planetopia-protocol
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

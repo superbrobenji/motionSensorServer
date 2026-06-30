@@ -15,8 +15,8 @@ import (
 )
 
 // TX power preset constants
+// OpTxPowerSet is imported from the shared protocol (opcodes.OpTxPowerSet = 0xC2).
 const (
-	OpTxPowerSet      = 0xA1
 	TxPowerShortRange = 0 // 2dBm  — same room
 	TxPowerIndoor     = 1 // 14dBm — through walls
 	TxPowerOutdoor    = 2 // 20dBm — outdoor, max range (default)

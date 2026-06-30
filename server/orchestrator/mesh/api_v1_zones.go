@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/superbrobenji/planetopia-protocol/opcodes"
 )
 
 func (api *APIServer) v1GetZones(w http.ResponseWriter, r *http.Request) {
@@ -60,5 +61,50 @@ func (api *APIServer) v1ZoneCommand(w http.ResponseWriter, r *http.Request) {
 		api.writeError(w, http.StatusNotFound, "zone not found")
 		return
 	}
-	api.writeError(w, http.StatusNotImplemented, "zone commands not yet implemented — pending shared protocol repo (Phase 3)")
+	var body struct {
+		Action string `json:"action"`
+		Colour []byte `json:"colour"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Action == "" {
+		api.writeError(w, http.StatusBadRequest, "action is required")
+		return
+	}
+
+	payload := make([]byte, MaxDataLength)
+	switch body.Action {
+	case "led_solid":
+		if len(body.Colour) != 3 {
+			api.writeError(w, http.StatusBadRequest, "led_solid requires colour [r,g,b]")
+			return
+		}
+		payload[0] = opcodes.OpLEDSolid
+		payload[1] = body.Colour[0]
+		payload[2] = body.Colour[1]
+		payload[3] = body.Colour[2]
+	case "led_off":
+		payload[0] = opcodes.OpLEDOff
+	case "relay_on":
+		payload[0] = opcodes.OpRelaySet
+		payload[1] = 0x01
+	case "relay_off":
+		payload[0] = opcodes.OpRelaySet
+		payload[1] = 0x00
+	default:
+		api.writeError(w, http.StatusBadRequest, "unknown action: "+body.Action)
+		return
+	}
+
+	nodes := api.meshServer.GetNodeRegistry().GetNodesByZone(id)
+	sent := 0
+	for _, node := range nodes {
+		if adapterIsOutput(node.AdapterType) {
+			if err := api.meshServer.SendNodeData(node.MAC, int32(AdapterTypeSerial), payload); err == nil {
+				sent++
+			}
+		}
+	}
+	api.writeJSON(w, http.StatusAccepted, APIResponse{
+		Success: true,
+		Data:    map[string]int{"sent": sent},
+	})
 }

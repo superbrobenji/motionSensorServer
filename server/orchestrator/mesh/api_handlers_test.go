@@ -138,7 +138,7 @@ func TestGetHealth_NoAuthRequired(t *testing.T) {
 }
 
 func TestIsValidAdapterType_AllKnownTypes(t *testing.T) {
-	valid := []int32{AdapterTypeUnknown, AdapterTypePIR, AdapterTypeWIFI, AdapterTypeLED, AdapterTypeSerial}
+	valid := []int32{AdapterTypeUnknown, AdapterTypeSerial, AdapterTypePIR, AdapterTypeLED, AdapterTypeRelay, AdapterTypeWIFI}
 	for _, v := range valid {
 		if !isValidAdapterType(v) {
 			t.Errorf("expected type %d to be valid", v)

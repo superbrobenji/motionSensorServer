@@ -21,6 +21,8 @@ func adapterTypeToString(t int32) string {
 		return "pir"
 	case AdapterTypeLED:
 		return "led"
+	case AdapterTypeRelay:
+		return "relay"
 	case AdapterTypeSerial:
 		return "serial"
 	default:
@@ -36,6 +38,8 @@ func adapterTypeFromString(s string) (int32, bool) {
 		return AdapterTypePIR, true
 	case "led":
 		return AdapterTypeLED, true
+	case "relay":
+		return AdapterTypeRelay, true
 	default:
 		return 0, false
 	}
