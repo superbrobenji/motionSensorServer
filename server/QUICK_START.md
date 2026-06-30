@@ -8,23 +8,24 @@ Copyright (C) 2026 Planetopia Contributors
 ## Prerequisites
 
 - Docker and Docker Compose
-- (Optional) ESP32 master node connected via USB
+- (Optional) ESP32 master node connected via USB for node enrollment
 
-## 1. Configure environment
+## 1. Environment Setup
 
 ```bash
 cp env.example .env
 ```
 
-Open `.env` and set at minimum:
+Edit `.env` and set these required variables:
 
 ```
 API_KEY=<generate with: openssl rand -hex 32>
+ADMIN_KEY=<generate with: openssl rand -hex 32>
 ```
 
 All other variables have working defaults for local development.
 
-## 2. Start services
+## 2. Start the Stack
 
 ```bash
 docker compose up -d
@@ -33,27 +34,73 @@ docker compose up -d
 This starts:
 | Service | Port | Description |
 |---------|------|-------------|
-| Orchestrator API | 8080 | REST API and mesh server |
-| Dashboard | 3000 | Web UI |
-| Kafka | 9092 | Event stream |
-| Jupyter | 8888 | Notebook environment |
+| Orchestrator API | 8080 | REST API v1 and mesh server |
+| Artist Portal | 3001 | Artist workspace UI |
+| Ops Dashboard | 3002 | Operations & enrollment management |
+| Kafka | 9092 | Event stream (internal) |
 
-## 3. Verify
+## 3. Verify Services
 
 ```bash
-curl -H "Authorization: Bearer $API_KEY" http://localhost:8080/status
+curl http://localhost:8080/api/v1/status
 ```
 
-Expected:
+Expected response:
 ```json
-{"success":true,"data":{"running":false,"totalNodes":0,"onlineNodes":0,"timestamp":1704067200}}
+{"status":"ok","data":{"running":true,"totalNodes":0,"onlineNodes":0}}
 ```
 
-## 4. Start the mesh server
+## 4. Enroll a Node
+
+After connecting an ESP32 master node via USB:
+
+### Check Pending Enrollments
 
 ```bash
-curl -X POST -H "Authorization: Bearer $API_KEY" http://localhost:8080/server/start
+curl http://localhost:8080/api/v1/enrollments/pending
 ```
+
+### Approve via cURL
+
+```bash
+curl -X POST http://localhost:8080/api/v1/enrollments/<enrollment_id>/approve \
+  -H "X-Admin-Key: $ADMIN_KEY"
+```
+
+Or use the **Ops Dashboard** (step 7) for a UI-based approval workflow.
+
+## 5. Artist Portal
+
+Open your browser and navigate to:
+
+```
+http://localhost:3001
+```
+
+The Artist Portal is where users create and manage installations, configure nodes, and design motion-reactive visuals.
+
+## 6. Ops Dashboard
+
+Open your browser and navigate to:
+
+```
+http://localhost:3002
+```
+
+You will be prompted for the `ADMIN_KEY` at login. The Ops Dashboard provides:
+- Node enrollment and approval workflow
+- Real-time system status
+- Health monitoring and diagnostics
+
+## 7. Development with Jupyter
+
+To include Jupyter for development and experimentation, use the development compose override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
+
+Jupyter will be available at `http://localhost:8888`.
 
 ## USB Serial Device Setup
 
@@ -71,6 +118,16 @@ sudo usermod -a -G dialout $USER
 SERIAL_PORT=/dev/ttyUSB0
 ```
 
+### macOS
+
+```bash
+# Check for connected device
+ls /dev/tty.usbserial* /dev/tty.usbmodem*
+
+# Update .env with the device path
+SERIAL_PORT=/dev/tty.usbserial-0001
+```
+
 ### Proxmox Container
 
 If running inside a Proxmox LXC with USB passthrough:
@@ -85,21 +142,9 @@ ls /dev/bus/usb/*/
 #     - "/dev/bus/usb/003/002:/dev/ttyUSB0"
 ```
 
-## Checking nodes
-
-After connecting an ESP32 master node:
-
-```bash
-# List enrolled nodes
-curl -H "Authorization: Bearer $API_KEY" http://localhost:8080/nodes
-
-# Request health reports from all nodes
-curl -X POST -H "Authorization: Bearer $API_KEY" http://localhost:8080/health/request
-```
-
 ## Troubleshooting
 
-### Service not starting
+### Services not starting
 
 ```bash
 docker compose ps
@@ -114,12 +159,17 @@ ls -la /dev/ttyUSB0
 sudo chmod 666 /dev/ttyUSB0
 ```
 
-### API returns 401
+### API returns 401/403
 
-`API_KEY` in `.env` does not match the header. Verify with:
+Verify your API keys:
 ```bash
 grep API_KEY .env
+grep ADMIN_KEY .env
 ```
+
+Ensure the correct header is used:
+- Public endpoints: no auth required
+- Protected endpoints: `-H "X-Admin-Key: $ADMIN_KEY"`
 
 ### Clean rebuild
 
@@ -129,5 +179,6 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
-See [orchestrator/README.md](orchestrator/README.md) for full API reference and
-protocol documentation.
+## Next Steps
+
+See [orchestrator/README.md](orchestrator/README.md) for the full API reference, protocol documentation, and advanced configuration options.
