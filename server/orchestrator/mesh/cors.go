@@ -17,7 +17,7 @@ func CORSMiddleware(allowedOrigins []string) mux.MiddlewareFunc {
 			origin := r.Header.Get("Origin")
 			if origin != "" && allowed[origin] {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PATCH, DELETE")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 			}
 			if r.Method == http.MethodOptions {

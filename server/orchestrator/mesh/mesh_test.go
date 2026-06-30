@@ -3,7 +3,10 @@ package mesh
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -868,5 +871,24 @@ func TestHandlePIRData_KafkaWriteError(t *testing.T) {
 
 	if len(mockStore.GetMessages()) != 1 {
 		t.Errorf("expected 1 Kafka message written, got %d", len(mockStore.GetMessages()))
+	}
+}
+
+func TestCORSMiddleware_AllowsPatchAndDelete(t *testing.T) {
+	handler := CORSMiddleware([]string{"http://localhost:3000"})(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+	)
+
+	for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+		req := httptest.NewRequest(http.MethodOptions, "/", nil)
+		req.Header.Set("Origin", "http://localhost:3000")
+		req.Header.Set("Access-Control-Request-Method", method)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+
+		allowed := rr.Header().Get("Access-Control-Allow-Methods")
+		if !strings.Contains(allowed, method) {
+			t.Errorf("preflight for %s: Allow-Methods = %q, want to contain %q", method, allowed, method)
+		}
 	}
 }
