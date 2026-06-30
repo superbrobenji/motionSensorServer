@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -203,5 +204,51 @@ func TestV1NodeCommand_ReturnsCommandId(t *testing.T) {
 	}
 	if _, err := uuid.Parse(resp.Data.CommandID); err != nil {
 		t.Errorf("commandId %q is not a valid UUID: %v", resp.Data.CommandID, err)
+	}
+}
+
+func TestV1GetCommandStatus_PendingAndAcked(t *testing.T) {
+	ms := newTestMeshServer(t)
+	cmdID := "test-command-id-1234"
+	ms.commandStore.Add(&PendingCommand{
+		ID:     cmdID,
+		NodeID: 2,
+		Action: "led_off",
+		SentAt: time.Now(),
+		Status: CommandStatusPending,
+	})
+
+	api := NewAPIServer(ms, "", nil)
+	req := httptest.NewRequest("GET", "/api/v1/nodes/2/command/"+cmdID, nil)
+	rr := httptest.NewRecorder()
+	api.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Data.Status != "pending" {
+		t.Errorf("status = %q, want pending", resp.Data.Status)
+	}
+}
+
+func TestV1GetCommandStatus_NotFound(t *testing.T) {
+	ms := newTestMeshServer(t)
+	api := NewAPIServer(ms, "", nil)
+	req := httptest.NewRequest("GET", "/api/v1/nodes/1/command/no-such-id", nil)
+	rr := httptest.NewRecorder()
+	api.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", rr.Code)
 	}
 }

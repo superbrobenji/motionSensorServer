@@ -186,6 +186,26 @@ func (api *APIServer) v1NodeCommand(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (api *APIServer) v1GetCommandStatus(w http.ResponseWriter, r *http.Request) {
+	commandID := mux.Vars(r)["commandId"]
+	cmd, ok := api.meshServer.GetCommandStore().Get(commandID)
+	if !ok {
+		api.writeError(w, http.StatusNotFound, "command not found")
+		return
+	}
+	data := map[string]interface{}{
+		"commandId": cmd.ID,
+		"nodeId":    cmd.NodeID,
+		"action":    cmd.Action,
+		"status":    string(cmd.Status),
+		"sentAt":    cmd.SentAt.Unix(),
+	}
+	if cmd.AckedAt != nil {
+		data["ackedAt"] = cmd.AckedAt.Unix()
+	}
+	api.writeJSON(w, http.StatusOK, APIResponse{Success: true, Data: data})
+}
+
 // adapterIsOutput returns true for adapter types that receive commands from the server.
 func adapterIsOutput(t int32) bool {
 	return t == AdapterTypeLED || t == AdapterTypeRelay
