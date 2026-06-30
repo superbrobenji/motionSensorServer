@@ -293,7 +293,7 @@ paths:
         - `health` — node health report `{nodeId, name, online, uptime, hopCount}`
         - `node_online` — first-seen node `{nodeId, name}`
         - `node_offline` — node offline `{nodeId, name}`
-        - `enrollment` — new enrollment request `{mac, receivedAt}`
+        - `enrolled` — node enrollment approved `{nodeId, name, type}`
         - `command_ack` — command acknowledged by node (Phase 5) `{commandId, nodeId, status}`
       responses:
         "200":

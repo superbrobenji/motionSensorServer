@@ -51,6 +51,14 @@ func (api *APIServer) setupRoutes() {
 	// so the container is marked healthy before any dependent services start.
 	api.router.HandleFunc("/health", api.getHealth).Methods("GET")
 
+	// Public v1 read-only endpoints — no auth (artist portal is public).
+	// Declared before sub to avoid mux routing ambiguity on /api/v1/nodes.
+	pub := api.router.PathPrefix("").Subrouter()
+	pub.Handle("/api/v1/nodes", InstrumentHandler("/api/v1/nodes", http.HandlerFunc(api.v1GetNodes))).Methods("GET")
+	pub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1GetNode))).Methods("GET")
+	pub.Handle("/api/v1/status", InstrumentHandler("/api/v1/status", http.HandlerFunc(api.v1Status))).Methods("GET")
+	pub.Handle("/api/v1/events", InstrumentHandler("/api/v1/events", http.HandlerFunc(api.v1Events))).Methods("GET")
+
 	// All other routes — wrapped with auth when an API key is configured
 	sub := api.router.PathPrefix("").Subrouter()
 	if api.apiKey != "" {
@@ -91,18 +99,10 @@ func (api *APIServer) setupRoutes() {
 	sub.Handle("/api/v1/zones/{id}", InstrumentHandler("/api/v1/zones/{id}", http.HandlerFunc(api.v1DeleteZone))).Methods("DELETE")
 	sub.Handle("/api/v1/zones/{id}/command", InstrumentHandler("/api/v1/zones/{id}/command", http.HandlerFunc(api.v1ZoneCommand))).Methods("POST")
 
-	// /api/v1/nodes
-	sub.Handle("/api/v1/nodes", InstrumentHandler("/api/v1/nodes", http.HandlerFunc(api.v1GetNodes))).Methods("GET")
-	sub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1GetNode))).Methods("GET")
+	// /api/v1/nodes (write operations remain auth-required)
 	sub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1UpdateNode))).Methods("PATCH")
 	sub.Handle("/api/v1/nodes/{id}", InstrumentHandler("/api/v1/nodes/{id}", http.HandlerFunc(api.v1DeleteNode))).Methods("DELETE")
 	sub.Handle("/api/v1/nodes/{id}/command", InstrumentHandler("/api/v1/nodes/{id}/command", http.HandlerFunc(api.v1NodeCommand))).Methods("POST")
-
-	// /api/v1/events (SSE)
-	sub.Handle("/api/v1/events", InstrumentHandler("/api/v1/events", http.HandlerFunc(api.v1Events))).Methods("GET")
-
-	// /api/v1/status
-	sub.Handle("/api/v1/status", InstrumentHandler("/api/v1/status", http.HandlerFunc(api.v1Status))).Methods("GET")
 
 	// /api/v1/enrollments
 	sub.Handle("/api/v1/enrollments/pending", InstrumentHandler("/api/v1/enrollments/pending", http.HandlerFunc(api.v1GetPendingEnrollments))).Methods("GET")
