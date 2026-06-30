@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +113,7 @@ func TestSendMessage_NoDeadlockWithConcurrentStop(t *testing.T) {
 	go func() {
 		defer close(writeLockDone)
 		ms.mu.Lock()
+		runtime.Gosched() // yield while holding write lock — simulates Stop() contention
 		ms.mu.Unlock()
 	}()
 
