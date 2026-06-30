@@ -34,10 +34,10 @@ const (
 	OpConfigSet  = opcodes.OpConfigSet  // 0xC1 — Server → node: set adapter type and config
 	OpTxPowerSet = opcodes.OpTxPowerSet // 0xC2 — Server → node: set TX power preset
 
-	// Health opcodes remain local (not yet in shared protocol).
-	OpHealthReq    byte = 0xB0 // Request health reports
-	OpHealthReport byte = 0xB1 // Node → server health status
-	OpNodeHealth   byte = 0xB2 // PIR (non-serial) node → server health status; transport: AdapterTypeSerial
+	// Health opcodes — shared with firmware via planetopia-protocol.
+	OpHealthReq    = opcodes.OpHealthReq    // 0xB0 — server → node: request health report
+	OpHealthReport = opcodes.OpHealthReport // 0xB1 — node (serial) → server: health status
+	OpNodeHealth   = opcodes.OpNodeHealth   // 0xB2 — node (non-serial) → server: health via serial adapter
 
 	// Ack opcode — mirrors opcodes.OpCommandAck (0xE0) from the shared protocol.
 	OpCommandAck = opcodes.OpCommandAck // Node → server: acknowledge a received command
