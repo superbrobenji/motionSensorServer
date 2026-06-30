@@ -1,0 +1,386 @@
+openapi: 3.0.3
+info:
+  title: Planetopia Mesh API
+  version: "1"
+  description: |
+    Public API for Planetopia mesh network integrations.
+    Provides real-time node state, zone management, and event streaming.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: nodes
+    description: Mesh node management
+  - name: zones
+    description: Zone management
+  - name: enrollments
+    description: Node enrollment approval
+  - name: events
+    description: Real-time SSE event stream
+  - name: status
+    description: System health
+
+paths:
+  /api/v1/status:
+    get:
+      summary: System status
+      tags: [status]
+      responses:
+        "200":
+          description: Current system health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/v1/nodes:
+    get:
+      summary: List all active nodes
+      tags: [nodes]
+      responses:
+        "200":
+          description: List of nodes
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIResponse"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Node"
+
+  /api/v1/nodes/{id}:
+    get:
+      summary: Get a single node
+      tags: [nodes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 255
+      responses:
+        "200":
+          description: Node found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/Node"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update node name, zone, or adapter type
+      tags: [nodes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                zone: { type: string }
+                type: { type: string, enum: [pir, led, relay, unknown] }
+      responses:
+        "200":
+          description: Node updated
+    delete:
+      summary: Remove node from registry
+      tags: [nodes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Node removed
+
+  /api/v1/nodes/{id}/command:
+    post:
+      summary: Send command to output node
+      tags: [nodes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeCommand"
+      responses:
+        "202":
+          description: Command sent — track acknowledgement via SSE command_ack event
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIResponse"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          commandId:
+                            type: string
+                            format: uuid
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "501":
+          description: Not yet implemented
+
+  /api/v1/zones:
+    get:
+      summary: List all zones
+      tags: [zones]
+      responses:
+        "200":
+          description: Zone list
+    post:
+      summary: Create a zone
+      tags: [zones]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "201":
+          description: Zone created
+
+  /api/v1/zones/{id}:
+    patch:
+      summary: Rename a zone
+      tags: [zones]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "200":
+          description: Zone updated
+    delete:
+      summary: Delete a zone
+      tags: [zones]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Zone deleted
+
+  /api/v1/zones/{id}/command:
+    post:
+      summary: Send command to all output nodes in a zone
+      tags: [zones]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeCommand"
+      responses:
+        "202":
+          description: Commands sent
+
+  /api/v1/enrollments/pending:
+    get:
+      summary: List nodes awaiting enrollment approval
+      tags: [enrollments]
+      responses:
+        "200":
+          description: Pending enrollment list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIResponse"
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Enrollment"
+
+  /api/v1/enrollments/{mac}/approve:
+    post:
+      summary: Approve a pending enrollment
+      tags: [enrollments]
+      parameters:
+        - name: mac
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "aa:bb:cc:dd:ee:ff"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                zone: { type: string }
+                type: { type: string }
+                nodeId: { type: integer, minimum: 1, maximum: 255 }
+      responses:
+        "200":
+          description: Enrollment approved
+
+  /api/v1/enrollments/{mac}/reject:
+    post:
+      summary: Reject a pending enrollment
+      tags: [enrollments]
+      parameters:
+        - name: mac
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Enrollment rejected
+
+  /api/v1/events:
+    get:
+      summary: SSE event stream
+      tags: [events]
+      description: |
+        Server-Sent Events stream. Events:
+        - `motion` — PIR trigger `{nodeId, name, zone, hopCount, timestamp}`
+        - `health` — node health report `{nodeId, name, online, uptime, hopCount}`
+        - `node_online` — first-seen node `{nodeId, name}`
+        - `node_offline` — node offline `{nodeId, name}`
+        - `enrollment` — new enrollment request `{mac, receivedAt}`
+        - `command_ack` — command acknowledged by node (Phase 5) `{commandId, nodeId, status}`
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+components:
+  schemas:
+    APIResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        error: { type: string }
+        data: {}
+
+    Node:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        zone: { type: string }
+        online: { type: boolean }
+        adapterType: { type: string, enum: [unknown, serial, pir, led, relay] }
+        uptime: { type: integer, description: Seconds since last boot }
+        hopCount: { type: integer }
+        lastSeen: { type: string, format: date-time }
+
+    NodeCommand:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [led_solid, led_off, relay_on, relay_off]
+        colour:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 255 }
+          minItems: 3
+          maxItems: 3
+          description: Required for led_solid — [r, g, b]
+
+    Enrollment:
+      type: object
+      properties:
+        mac: { type: string, example: "aa:bb:cc:dd:ee:ff" }
+        publicKey: { type: string, description: Hex-encoded Curve25519 public key }
+        status: { type: integer, description: "0=pending, 1=approved, 2=rejected" }
+        receivedAt: { type: integer, description: Unix timestamp }
+        approvedAt: { type: integer, description: Unix timestamp }
+
+    StatusResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            serial:
+              type: object
+              properties:
+                primary: { type: string, enum: [connected, disconnected] }
+                secondary: { type: string, enum: [connected, disconnected, not_configured] }
+            nodes:
+              type: object
+              properties:
+                total: { type: integer }
+                online: { type: integer }
+                offline: { type: integer }
+            mesh:
+              type: object
+              properties:
+                masterOnline: { type: boolean }
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/APIResponse"
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/APIResponse"
