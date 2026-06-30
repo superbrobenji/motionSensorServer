@@ -1050,8 +1050,8 @@ func TestHandleCommandAck_PublishesSSEEvent(t *testing.T) {
 		if payload["status"] != "ok" {
 			t.Errorf("status = %v, want ok", payload["status"])
 		}
-		if nodeID, ok := payload["nodeId"]; !ok || nodeID == nil {
-			t.Error("nodeId missing from payload")
+		if payload["nodeId"] != float64(3) {
+			t.Errorf("nodeId = %v, want 3", payload["nodeId"])
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timeout: command_ack SSE event not published")
