@@ -77,7 +77,7 @@ func (h *ContainerHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"logs unavailable"}`, http.StatusServiceUnavailable)
 		return
 	}
-	defer logs.Close()
+	defer func() { _ = logs.Close() }()
 	w.Header().Set("Content-Type", "text/plain")
-	io.Copy(w, logs)
+	_, _ = io.Copy(w, logs)
 }

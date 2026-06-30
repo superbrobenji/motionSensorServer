@@ -33,7 +33,7 @@ func freePort(t *testing.T) int {
 		t.Fatalf("could not find free port: %v", err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	_ = ln.Close()
 	return port
 }
 
@@ -80,7 +80,7 @@ func TestStartAPIServer_AcceptsHTTPConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /status failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -131,7 +131,7 @@ func TestStartAPIServer_RejectsConnectionsAfterShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected port %d to be open before shutdown: %v", port, err)
 	}
-	pre.Close()
+	_ = pre.Close()
 
 	// Shut the server down
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -146,7 +146,7 @@ func TestStartAPIServer_RejectsConnectionsAfterShutdown(t *testing.T) {
 	// Now the port should be closed
 	conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
 	if err == nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Errorf("expected port %d to be closed after shutdown, but a connection succeeded", port)
 	}
 }

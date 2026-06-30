@@ -23,7 +23,5 @@ func AuthMiddleware(adminKey string) func(http.Handler) http.Handler {
 func WriteJSON(w http.ResponseWriter, status int, body interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		// already wrote header — nothing to do
-	}
+	_ = json.NewEncoder(w).Encode(body)
 }

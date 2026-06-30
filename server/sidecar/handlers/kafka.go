@@ -26,7 +26,7 @@ func (h *KafkaHandler) Status(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	partitions, err := conn.ReadPartitions("motion-trigger")
 	if err != nil {
@@ -59,7 +59,7 @@ func (h *KafkaHandler) RecentEvents(w http.ResponseWriter, r *http.Request) {
 		Partition: 0,
 		MaxBytes:  1024 * 1024,
 	})
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	if err := reader.SetOffset(kafka.LastOffset); err != nil {
 		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to seek"})

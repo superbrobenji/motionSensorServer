@@ -117,7 +117,7 @@ func TestPersistence_RoundTrip(t *testing.T) {
 		t.Fatalf("CreateTemp: %v", err)
 	}
 	path := f.Name()
-	f.Close()
+	_ = f.Close()
 
 	r1 := NewRegistry()
 	mac := makeMAC(0xCC)

@@ -239,12 +239,16 @@ func (ms *MeshServer) Stop() error {
 	}
 
 	if ms.serialComm != nil {
-		ms.serialComm.Close()
+		if err := ms.serialComm.Close(); err != nil {
+			slog.Warn("serial comm close", "err", err)
+		}
 		SetSerialConnected(false)
 	}
 
 	if ms.secondarySerialComm != nil {
-		ms.secondarySerialComm.Close()
+		if err := ms.secondarySerialComm.Close(); err != nil {
+			slog.Warn("secondary serial comm close", "err", err)
+		}
 		ms.secondaryConnected = false
 	}
 
@@ -607,7 +611,7 @@ func (ms *MeshServer) ApproveEnrollment(macStr string, params ApprovalParams) er
 	// Hotswap detection: explicit nodeId provided and an existing node already owns it.
 	// Inherit unspecified fields from the old node; the old entry is marked replaced.
 	var hotswapOldMAC []byte
-	var inheritedAdapterType int32 = AdapterTypeUnknown // sentinel: no inheritance
+	inheritedAdapterType := AdapterTypeUnknown // sentinel: no inheritance
 	if params.NodeID > 0 {
 		if oldNode, ok := ms.nodeRegistry.GetNodeByID(params.NodeID); ok &&
 			!bytes.Equal(oldNode.MAC, node.MAC[:]) {
