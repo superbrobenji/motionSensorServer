@@ -39,7 +39,7 @@ func (h *ContainerHandler) ListContainers(w http.ResponseWriter, r *http.Request
 	out := make([]containerInfo, 0, len(containers))
 	for _, c := range containers {
 		out = append(out, containerInfo{
-			ID:     c.ID[:12],
+			ID:     func() string { if len(c.ID) > 12 { return c.ID[:12] }; return c.ID }(),
 			Names:  c.Names,
 			Image:  c.Image,
 			Status: c.Status,

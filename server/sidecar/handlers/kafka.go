@@ -61,6 +61,11 @@ func (h *KafkaHandler) RecentEvents(w http.ResponseWriter, r *http.Request) {
 	})
 	defer reader.Close()
 
+	if err := reader.SetOffset(kafka.LastOffset); err != nil {
+		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to seek"})
+		return
+	}
+
 	// Seek to end then read last N
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
