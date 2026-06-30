@@ -128,6 +128,21 @@ services:
       - kafka-net
     restart: unless-stopped
 
+  ops-dashboard:
+    build:
+      context: ./ops-dashboard
+      args:
+        VITE_API_URL: ${OPS_API_URL:-http://localhost:8080}
+        VITE_SIDECAR_URL: ${SIDECAR_URL:-http://localhost:9000}
+    ports:
+      - "3002:3002"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - kafka-net
+    restart: unless-stopped
+
 networks:
   kafka-net:
     driver: bridge
