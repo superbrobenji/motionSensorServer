@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, type Node } from "../services/api";
 import { connectSSE, type SSEEvent } from "../services/sse";
 import { NodeGrid } from "../components/NodeGrid";
