@@ -6,7 +6,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/segmentio/kafka-go v0.4.48
-	github.com/superbrobenji/planetopia-protocol v0.1.0
+	github.com/superbrobenji/planetopia-protocol v0.2.0
 	go.bug.st/serial v1.6.2
 	google.golang.org/protobuf v1.36.8
 )
