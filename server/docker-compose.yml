@@ -99,6 +99,20 @@ services:
     networks:
       - kafka-net
 
+  artist-portal:
+    build:
+      context: ./artist-portal
+      args:
+        VITE_API_URL: ${ARTIST_API_URL:-http://localhost:8080}
+    ports:
+      - "3001:3001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - kafka-net
+    restart: unless-stopped
+
 networks:
   kafka-net:
     driver: bridge
