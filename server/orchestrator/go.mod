@@ -9,7 +9,7 @@ require (
 	github.com/segmentio/kafka-go v0.4.48
 	github.com/superbrobenji/lattice-protocol v0.3.1-0.20260701122822-fc7bad932731
 	go.bug.st/serial v1.6.2
-	google.golang.org/protobuf v1.36.8
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
