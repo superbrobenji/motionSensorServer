@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	EventStore "github.com/superbrobenji/motionServer/eventStore"
-	"github.com/superbrobenji/motionServer/mesh"
+	EventStore "github.com/superbrobenji/lattice-hub/eventStore"
+	"github.com/superbrobenji/lattice-hub/mesh"
 )
 
 func main() {
@@ -52,7 +52,7 @@ func main() {
 		slog.Warn("Failed to create data directory", "error", err)
 	}
 
-	slog.Info("Starting Planetopia Motion Sensor Server")
+	slog.Info("Starting Lattice Motion Sensor Server")
 	slog.Info("Serial", "port", *serialPort, "baud", *baudRate)
 	if dualMasterEnabled && serialPortSecondary != "" {
 		slog.Info("Secondary serial port", "port", serialPortSecondary)

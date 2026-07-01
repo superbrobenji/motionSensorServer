@@ -3,8 +3,8 @@ package mesh
 import (
 	"fmt"
 
-	"github.com/superbrobenji/planetopia-protocol/adapter"
-	"github.com/superbrobenji/planetopia-protocol/opcodes"
+	"github.com/superbrobenji/lattice-protocol/adapter"
+	"github.com/superbrobenji/lattice-protocol/opcodes"
 )
 
 // Message Types
@@ -34,7 +34,7 @@ const (
 	OpConfigSet  = opcodes.OpConfigSet  // 0xC1 — Server → node: set adapter type and config
 	OpTxPowerSet = opcodes.OpTxPowerSet // 0xC2 — Server → node: set TX power preset
 
-	// Health opcodes — shared with firmware via planetopia-protocol.
+	// Health opcodes — shared with firmware via lattice-protocol.
 	OpHealthReq    = opcodes.OpHealthReq    // 0xB0 — server → node: request health report
 	OpHealthReport = opcodes.OpHealthReport // 0xB1 — node (serial) → server: health status
 	OpNodeHealth   = opcodes.OpNodeHealth   // 0xB2 — node (non-serial) → server: health via serial adapter

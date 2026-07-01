@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# Planetopia Dashboard
+# Lattice Dashboard
 
-React Router v7 web application for monitoring and controlling the Planetopia
+React Router v7 web application for monitoring and controlling the Lattice
 motion sensor mesh network. Communicates with the orchestrator REST API.
 
 ## Features
@@ -63,11 +63,11 @@ variable set in `server/.env`.
 ### Manual Docker build
 
 ```bash
-docker build -t planetopia-dashboard server/dashboard/
+docker build -t lattice-dashboard server/dashboard/
 docker run -p 3000:3000 \
   -e VITE_API_URL=http://localhost:8080 \
   -e VITE_API_KEY=your-key \
-  planetopia-dashboard
+  lattice-dashboard
 ```
 
 ## Project Structure
@@ -86,5 +86,5 @@ app/
 
 ## License
 
-Copyright (C) 2026 Planetopia Contributors.
+Copyright (C) 2026 Lattice Contributors.
 GNU General Public License v3.0 — see root [LICENSE](../../LICENSE).

@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/superbrobenji/planetopia-protocol/opcodes"
+	"github.com/superbrobenji/lattice-protocol/opcodes"
 )
 
 func (api *APIServer) v1GetNodes(w http.ResponseWriter, r *http.Request) {

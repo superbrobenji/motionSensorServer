@@ -1,7 +1,7 @@
 package mesh
 
 import (
-	EventStore "github.com/superbrobenji/motionServer/eventStore"
+	EventStore "github.com/superbrobenji/lattice-hub/eventStore"
 )
 
 // MockEventStore provides a mock implementation for testing.

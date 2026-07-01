@@ -1,7 +1,7 @@
-# Planetopia Orchestrator
+# Lattice Orchestrator
 
 Go service that communicates with an ESP32 mesh network over USB serial,
-implementing the Planetopia protocol for motion sensor management.
+implementing the Lattice protocol for motion sensor management.
 
 SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -203,7 +203,7 @@ Check that `API_KEY` in `server/.env` matches the header value you are sending.
 
 ## License
 
-Copyright (C) 2026 Planetopia Contributors.
+Copyright (C) 2026 Lattice Contributors.
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	EventStore "github.com/superbrobenji/motionServer/eventStore"
-	"github.com/superbrobenji/motionServer/nodeauth"
+	EventStore "github.com/superbrobenji/lattice-hub/eventStore"
+	"github.com/superbrobenji/lattice-hub/nodeauth"
 	"go.bug.st/serial"
 )
 

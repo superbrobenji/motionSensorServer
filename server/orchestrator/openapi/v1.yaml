@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: Planetopia Mesh API
+  title: Lattice Mesh API
   version: "1"
   description: |
-    Public API for Planetopia mesh network integrations.
+    Public API for Lattice mesh network integrations.
     Provides real-time node state, zone management, and event streaming.
 
 servers:

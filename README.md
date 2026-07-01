@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# Planetopia Motion Sensor Server
+# Lattice Motion Sensor Server
 
-[![CI](https://github.com/superbrobenji/motionSensorServer/actions/workflows/ci.yml/badge.svg)](https://github.com/superbrobenji/motionSensorServer/actions/workflows/ci.yml)
+[![CI](https://github.com/superbrobenji/lattice-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/superbrobenji/lattice-hub/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Go 1.23+](https://img.shields.io/badge/Go-1.23+-00ADD8.svg)](https://go.dev/)
 
-Server-side counterpart to the [Planetopia ESP32 firmware](https://github.com/superbrobenji/Planetopia-nodes). Receives motion events from an ESP32-NOW mesh network over USB serial, stores them in Kafka, and exposes a REST API and web dashboard for monitoring and control.
+Server-side counterpart to the [Lattice ESP32 firmware](https://github.com/superbrobenji/lattice-nodes). Receives motion events from an ESP32-NOW mesh network over USB serial, stores them in Kafka, and exposes a REST API and web dashboard for monitoring and control.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ Server-side counterpart to the [Planetopia ESP32 firmware](https://github.com/su
 ## Repository Structure
 
 ```
-motionSensorServer/
+lattice-hub/
 ├── server/
 │   ├── orchestrator/    # Go service — serial comms, mesh protocol, REST API, Kafka
 │   ├── dashboard/       # React Router app — web UI for node monitoring
@@ -81,4 +81,4 @@ See [server/QUICK_START.md](server/QUICK_START.md) for USB serial device setup, 
 ## License
 
 GNU General Public License v3.0 — see [LICENSE](LICENSE).
-Copyright (C) 2026 Planetopia Contributors.
+Copyright (C) 2026 Lattice Contributors.

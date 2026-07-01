@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/superbrobenji/planetopia-protocol/opcodes"
+	"github.com/superbrobenji/lattice-protocol/opcodes"
 	"google.golang.org/protobuf/proto"
 )
 

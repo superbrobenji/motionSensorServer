@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
-	"github.com/superbrobenji/motionServer/sidecar/handlers"
+	"github.com/superbrobenji/lattice-hub/sidecar/handlers"
 )
 
 func main() {

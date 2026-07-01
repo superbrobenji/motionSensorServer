@@ -5,7 +5,7 @@ export function Guides() {
 
       <section>
         <h2>Quick Start</h2>
-        <p>The Planetopia API is available at your deployment URL on port 8080. No authentication required.</p>
+        <p>The Lattice API is available at your deployment URL on port 8080. No authentication required.</p>
         <pre>{`curl http://localhost:8080/api/v1/nodes`}</pre>
       </section>
 

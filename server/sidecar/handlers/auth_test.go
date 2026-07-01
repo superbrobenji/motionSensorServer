@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/superbrobenji/motionServer/sidecar/handlers"
+	"github.com/superbrobenji/lattice-hub/sidecar/handlers"
 )
 
 func TestAuthMiddleware_BlocksWrongKey(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/superbrobenji/motionServer/sidecar
+module github.com/superbrobenji/lattice-hub/sidecar
 
 go 1.26.4
 
